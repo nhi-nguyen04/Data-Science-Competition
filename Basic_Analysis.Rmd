@@ -13,7 +13,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(readr)
 library(tidyverse)
-
+library(patchwork)
+library(forcats)
+theme_set(theme_minimal())
 ```
 
 ```{r Load in Data, message=FALSE}
@@ -44,33 +46,78 @@ sum(is.na(data_test))
 
 ```
 
-```{r Adjust Data types and replace NA}
+```{r Clean Data}
 
+# Replace NA with -1/Missing
 data_train <- data_train %>%
   mutate(across(where(is.character), ~ replace_na(.x, "Missing")),
-         across(where(is.numeric), ~ replace_na(.x, -1)), # -1 meaning missing
+         across(where(is.numeric), ~ replace_na(.x, -1)),
          across(2:last_col(), factor))
 
 sum(is.na(data_train))
 
+# Change data types to factor
 data_train_labels <- data_train_labels %>% 
   mutate(across(2:last_col(), factor))
 
+# Repeat for test dataset
 data_test <- data_test %>%
   mutate(across(where(is.character), ~ replace_na(.x, "Missing")),
          across(where(is.numeric), ~ replace_na(.x, -1)), # -1 meaning missing
          across(2:last_col(), factor))
 
 sum(is.na(data_test))
-```
 
-```{r Frequency Table}
 
+# Combine Training Data with Training Labels
 data_train <- data_train %>%
   full_join(data_train_labels, by = "respondent_id")
 
-prop.table(data_train$h1n1_vaccine)
-prop.table(data_train$seasonal_vaccine)
+
+# Reshape data to long format for easier plotting
+long_data <- data_train_labels %>%
+  select(h1n1_vaccine,
+         seasonal_vaccine) %>%
+  pivot_longer(
+    cols = c("h1n1_vaccine",
+             "seasonal_vaccine"),
+    names_to = "vaccine",
+    values_to = "use")
+
+```
+
+```{r Analyse Correlation}
+
+# Create a table
+tab <- table("H1N1 Vaccine" = data_train$h1n1_vaccine, 
+             "Seasonal Vaccine" = data_train$seasonal_vaccine)
+
+# Normalize to proportions
+prop_tab <- prop.table(tab)
+
+# Add totals
+addmargins(prop_tab)
+
+# Correlation between the target variables
+cor(as.numeric(data_train$h1n1_vaccine),
+    as.numeric(data_train$seasonal_vaccine),
+    method = "pearson")
+
+# Moderate positive correlation: 0.37
+# People who get h1n1 vaccine tend to get the seasonal one as well but not the other way around.
+# A lot of people don't get vaccinated at all.
+```
+
+```{r Check Proportions of Vaccines}
+
+ggplot(long_data) +
+  geom_bar(aes(x = vaccine,
+               fill = use),
+           position = "fill") +
+  labs(title = "Proportion of Vaccine Usage",
+       x = " ",
+       y = "Proportion",
+       fill = "Usage")
 
 ```
 
