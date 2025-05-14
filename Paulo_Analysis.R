@@ -338,3 +338,85 @@ pipeline_checklist <- tribble(
 
 # Display the checklist
 kable(pipeline_checklist, caption = "Pipeline Structure Checklist")
+
+
+
+
+# ✅ 1. Start with a Naive Model (Already Done)
+# You're using:
+# 
+# Logistic regression (GLM) with default parameters
+# 
+# No feature engineering or model tuning
+# 
+# Baseline set using training_set_features.csv only
+# 
+# Status: ✅ Complete
+
+####Use cross validation for reability
+#for h1n1_vaccine
+set.seed(123)
+
+cv_control <- trainControl(method = "cv", number = 5, classProbs = TRUE, summaryFunction = twoClassSummary)
+
+# Convert target to factor with labels (for caret)
+df$h1n1_vaccine <- factor(df$h1n1_vaccine, labels = c("No", "Yes"))
+
+cv_model_h1n1 <- train(
+  h1n1_vaccine ~ ., data = df,
+  method = "glm",
+  family = binomial,
+  trControl = cv_control,
+  metric = "ROC"
+)
+
+print(cv_model_h1n1)
+
+
+
+#for seasonal_vaccine
+df$seasonal_vaccine <- factor(df$seasonal_vaccine, labels = c("No", "Yes"))
+
+cv_model_seasonal <- train(
+  seasonal_vaccine ~ ., data = df,
+  method = "glm",
+  family = binomial,
+  trControl = cv_control,
+  metric = "ROC"
+)
+
+print(cv_model_seasonal)
+
+
+#Analyze Misclassifications / Residuals
+
+# Predict probabilities for H1N1
+prob_h1n1 <- predict(cv_model_h1n1, df, type = "prob")[, "Yes"]
+pred_h1n1 <- ifelse(prob_h1n1 > 0.5, "Yes", "No")
+
+# Actual vs predicted
+misclassified_h1n1 <- df %>%
+  mutate(predicted = pred_h1n1) %>%
+  filter(predicted != h1n1_vaccine)
+
+# Show top few misclassifications
+head(misclassified_h1n1)
+
+# Visual: Which age groups or income levels are often misclassified?
+library(ggplot2)
+ggplot(misclassified_h1n1, aes(x = age_group)) +
+  geom_bar(fill = "red") +
+  ggtitle("H1N1 Misclassifications by Age Group") +
+  theme_minimal()
+
+
+
+
+
+baseline_metrics <- tibble::tribble(
+  ~Target, ~Model, ~CrossVal_ROC,
+  "H1N1 Vaccine", "Logistic Regression", max(cv_model_h1n1$results$ROC),
+  "Seasonal Vaccine", "Logistic Regression", max(cv_model_seasonal$results$ROC)
+)
+
+knitr::kable(baseline_metrics, caption = "Baseline ROC-AUC Scores (5-fold CV)")
