@@ -31,4 +31,19 @@ Each row represents an individual, and features include:
 The competition uses **Area Under the ROC Curve (AUC-ROC)** as the evaluation metric, computed separately for each vaccine prediction and averaged.
 
 ## 📁 Repository Structure
-
+```
+├── Data/
+│ ├── data/
+│ ├── submission_format.csv
+│ ├── test_set_features.csv
+│ ├── training_set_features.csv
+│ └── training_set_labels.csv
+├── Eda/
+│ ├── Basic_Analysis.Rmd
+│ └── Paulo_Analysis.R
+├── Model/
+│ └── Model.Rmd
+├── .Rhistory
+├── Flu.Rproj
+└── README.md
+```
