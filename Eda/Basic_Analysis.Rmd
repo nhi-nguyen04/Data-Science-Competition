@@ -48,6 +48,19 @@ sum(is.na(data_test))
 
 ```{r Clean Data}
 
+# Function to get the mode
+# Parameter:
+# x: the data, where the mode should be determined
+
+mode <- function(x, na.rm = FALSE) {
+  if(na.rm){
+    x = x[!is.na(x)]
+  }
+
+  ux <- unique(x)
+  return(ux[which.max(tabulate(match(x, ux)))])
+}
+
 # Replace NA with mode (character)/median (numeric)
 data_train <- data_train %>%
   mutate(across(where(is.character), ~ replace_na(.x, mode(., na.rm = TRUE))),
