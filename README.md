@@ -47,3 +47,12 @@ The competition uses **Area Under the ROC Curve (AUC-ROC)** as the evaluation me
 ├── Flu.Rproj
 └── README.md
 ```
+
+## 📓 Logbook:
+
+17/05/2025
+
+We held a discord  meeting at 10:00am. All  members attended. We discussed the dataset in general and decided that first step 
+would be to take a deeper look at the individual variables and preparations.
+A Google doc was set up in order for the members to collaborate on writing down ideas, tasks etc. 
+Going forward, each member will take a look at their task  and we'll meet again on Monday (19/05/2025) to discuss the progress.
