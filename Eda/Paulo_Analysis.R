@@ -420,3 +420,90 @@ baseline_metrics <- tibble::tribble(
 )
 
 knitr::kable(baseline_metrics, caption = "Baseline ROC-AUC Scores (5-fold CV)")
+
+------------------------------------------------------------------------------------------------------------------------------------------------
+  
+  
+#  Second attempt at model
+  
+  
+  ## Baseline Logistic Regression for H1N1 and Seasonal Vaccine Prediction in R
+  
+  # Ensure required package versions
+  if (!requireNamespace("rlang", quietly = TRUE) || packageVersion("rlang") < "1.1.5") {
+    install.packages("rlang")
+  }
+
+# Load necessary libraries
+library(tidymodels)
+library(readr)
+library(dplyr)
+
+# 1. Read datasets
+train_features <- read_csv("/Data/training_set_features.csv")
+train_labels   <- read_csv("/Data/training_set_labels.csv")
+test_features  <- read_csv("/Data/test_set_features.csv")
+
+# 2. Merge training features and labels
+data <- train_features %>%
+  inner_join(train_labels, by = "respondent_id")
+
+# 3. Define targets
+targets <- c("h1n1_vaccine", "seasonal_vaccine")
+
+# 4. Preprocessing recipe template: impute, scale, encode
+base_recipe <- recipe(~ ., data = data) %>%
+  update_role(respondent_id, new_role = "id") %>%
+  # Numeric: median imputation and standardization
+  step_impute_median(all_numeric(), -all_outcomes()) %>%
+  step_normalize(all_numeric(), -all_outcomes()) %>%
+  # Categorical: mode imputation and one-hot encoding
+  step_impute_mode(all_nominal(), -all_outcomes()) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+# 5. Logistic regression specification
+log_spec <- logistic_reg() %>%
+  set_engine("glm") %>%
+  set_mode("classification")
+
+# Function to evaluate baseline for a given target using ROC AUC
+evaluate_baseline <- function(target_var) {
+  # Create recipe specific to the target
+  rec <- base_recipe %>%
+    update_role(all_outcomes(), new_role = "predictor") %>%
+    update_role({{ target_var }}, new_role = "outcome") %>%
+    recipe(as.formula(paste(target_var, "~ .")), data = data)
+  
+  # Create workflow
+  wf <- workflow() %>%
+    add_model(log_spec) %>%
+    add_recipe(rec)
+  
+  # 5-fold CV stratified on the target
+  cv_splits <- vfold_cv(data, v = 5, strata = !!sym(target_var))
+  
+  # Evaluate using ROC AUC
+  res <- wf %>%
+    fit_resamples(
+      resamples = cv_splits,
+      metrics = metric_set(roc_auc),
+      control = control_resamples(save_pred = TRUE)
+    )
+  metrics <- collect_metrics(res)
+  # Extract mean ROC AUC
+  auc <- metrics %>%
+    filter(.metric == "roc_auc") %>%
+    pull(mean)
+  return(auc)
+}
+
+# 6. Compute ROC AUC for each target and their mean
+results <- map_dbl(targets, evaluate_baseline)
+names(results) <- targets
+
+# Print individual AUCs and overall mean
+cat("Baseline ROC AUC Results:\n")
+for (t in targets) {
+  cat(sprintf("%s AUC: %.4f\n", t, results[t]))
+}
+cat(sprintf("Overall Mean AUC: %.4f\n", mean(results)))
