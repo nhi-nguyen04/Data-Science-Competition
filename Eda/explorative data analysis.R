@@ -1,4 +1,4 @@
-Advanced EDA for Flu Shot Learning Competition
+# Advanced EDA for Flu Shot Learning Competition
 # -----------------------------------------------------
 
 # Load required libraries
@@ -14,8 +14,11 @@ library(viridis)        # For colorblind-friendly palettes
 library(gridExtra)      # For arranging multiple plots
 library(caret)          # For feature relationships
 library(knitr)          # For nicer table output in markdown
-install.packages("tableone")
 library(tableone)       # For creating summary tables
+library(purrr)
+library(forcats)
+
+
 
 # Set colorblind-friendly palettes
 cb_palette <- viridis(8, option = "D")
@@ -30,9 +33,9 @@ theme_set(theme_minimal(base_size = 11) +
                   strip.text = element_text(face = "bold")))
 
 # Function to save plots
-save_plot <- function(plot, filename, width = 10, height = 7) {
-  ggsave(paste0("plots/", filename, ".png"), plot, width = width, height = height, dpi = 300)
-}
+# save_plot <- function(plot, filename, width = 10, height = 7) {
+#   ggsave(paste0("plots/", filename, ".png"), plot, width = width, height = height, dpi = 300)
+# }
 
 # # Create plots directory if it doesn't exist
 # if (!dir.exists("plots")) {
@@ -143,7 +146,7 @@ target_plot <- ggplot(target_counts, aes(x = h1n1_vaccine, y = seasonal_vaccine,
 
 print(target_plot)
 #save_plot(target_plot, "01_target_distribution")
-
+#####----------------------------------------------------######----------------------------------------------------######
 # Individual vaccination rates
 h1n1_rate <- sum(df_updated$h1n1_vaccine == 1, na.rm = TRUE) / nrow(df_updated) * 100
 seasonal_rate <- sum(df_updated$seasonal_vaccine == 1, na.rm = TRUE) / nrow(df_updated) * 100
@@ -174,6 +177,7 @@ vax_plot <- ggplot(vaccination_summary, aes(x = vaccine_type, y = percentage, fi
 
 print(vax_plot)
 #save_plot(vax_plot, "02_vaccination_rates", width = 8, height = 6)
+#####----------------------------------------------------######----------------------------------------------------######
 
 # -----------------------------------------------------
 # 3. MISSING VALUES ANALYSIS
@@ -223,17 +227,26 @@ missing_plot <- ggplot(missing_summary %>% filter(missing > 0),
 
 print(missing_plot)
 #save_plot(missing_plot, "03_missing_values")
+#####----------------------------------------------------######----------------------------------------------------######
+
+#############################
+##ERROR
 
 # Enhanced missing data pattern visualization using naniar
-miss_pattern <- gg_miss_upset(df_updated, sets = names(df_updated)[colSums(is.na(df_updated)) > 0])
-print(miss_pattern)
-######### There are errors here
+#miss_pattern <- gg_miss_upset(df_updated, sets = names(df_updated)[colSums(is.na(df_updated)) > 0])
+#print(miss_pattern)
 #save_plot(miss_pattern, "04_missing_patterns", width = 12, height = 8)
+#####----------------------------------------------------######----------------------------------------------------######
 
 # Visualize missingness relationships
 miss_var_plot <- gg_miss_var(df_updated, show_pct = TRUE)
 print(miss_var_plot)
 #save_plot(miss_var_plot, "05_missing_variables")
+#####----------------------------------------------------######----------------------------------------------------######
+
+
+#I DONT GET THE POINT OF THIS and HOW TO PRESENT IT
+
 
 # Check if missingness in key variables is related to target
 if (sum(missing_summary$missing) > 0) {
@@ -266,9 +279,12 @@ if (sum(missing_summary$missing) > 0) {
   }
 }
 
+
 # -----------------------------------------------------
-# 4. FEATURE DISTRIBUTION ANALYSIS #needs improvement
+# 4. FEATURE DISTRIBUTION ANALYSIS
 # -----------------------------------------------------
+
+# I Dont find thid ection very important
 cat("\n## 4. FEATURE DISTRIBUTION ANALYSIS\n\n")
 
 # 4.1 Binary Features Analysis
@@ -277,15 +293,15 @@ cat("### 4.1 Binary Features Analysis\n\n")
 # Create a summary for binary features
 binary_summary <- df_updated %>%
   select(all_of(binary_features)) %>%
-  summarise(across(everything(), 
-                   ~list(
-                     Yes = sum(.x == 1, na.rm = TRUE),
-                     No = sum(.x == 0, na.rm = TRUE),
-                     Missing = sum(is.na(.x)),
-                     Yes_pct = round(sum(.x == 1, na.rm = TRUE) / sum(!is.na(.x)) * 100, 1)
-                   ))) %>%
-  pivot_longer(cols = everything(), names_to = "feature") %>%
-  unnest_wider(value)
+  pivot_longer(cols = everything(), names_to = "feature", values_to = "value") %>%
+  group_by(feature) %>%
+  summarise(
+    Yes = sum(value == 1, na.rm = TRUE),
+    No = sum(value == 0, na.rm = TRUE),
+    Missing = sum(is.na(value)),
+    Yes_pct = round(sum(value == 1, na.rm = TRUE) / sum(!is.na(value)) * 100, 1),
+    .groups = "drop"
+  )
 
 print_table(binary_summary)
 
@@ -293,23 +309,15 @@ print_table(binary_summary)
 binary_plot_data <- df_updated %>%
   select(all_of(binary_features)) %>%
   pivot_longer(cols = everything(), names_to = "feature", values_to = "value") %>%
+  filter(!is.na(value)) %>% # filter before mutate for cleaner reordering
   mutate(
-    feature = fct_reorder(feature, as.numeric(value == 1), .fun = mean, na.rm = TRUE),
+    feature = fct_reorder(feature, as.integer(value), .fun = mean), # Use integer for correct ordering
     value = factor(value, levels = c(0, 1), labels = c("No", "Yes"))
-  ) %>%
-  filter(!is.na(value))
+  )
 
+# Then plot
 binary_dist_plot <- ggplot(binary_plot_data, aes(x = feature, fill = value)) +
   geom_bar(position = "fill") +
-  geom_text(
-    data = binary_plot_data %>% 
-      filter(value == "Yes") %>% 
-      count(feature, value) %>% 
-      group_by(feature) %>% 
-      mutate(pct = n / sum(n), pos = pct / 2),
-    aes(y = pos, label = paste0(round(pct * 100), "%")),
-    color = "white", fontface = "bold", size = 3
-  ) +
   scale_fill_manual(values = cb_palette[c(1, 7)]) +
   coord_flip() +
   labs(
@@ -318,13 +326,21 @@ binary_dist_plot <- ggplot(binary_plot_data, aes(x = feature, fill = value)) +
     x = "Feature",
     y = "Proportion",
     fill = "Response"
+  ) +
+  geom_text(
+    aes(label = scales::percent(after_stat(count) / tapply(after_stat(count), after_stat(x), sum)[after_stat(x)], accuracy = 1)),
+    stat = "count",
+    position = position_fill(vjust = 0.5),
+    color = "white", size = 3, fontface = "bold"
   )
 
 print(binary_dist_plot)
-save_plot(binary_dist_plot, "06_binary_features")
-
+#save_plot(binary_dist_plot, "06_binary_features")
+#####----------------------------------------------------######----------------------------------------------------######
 # 4.2 Categorical Features Analysis
 cat("\n### 4.2 Categorical Features Analysis\n\n")
+
+#### ITS BEST TO BREAK DOWN THIS AND PRODUCE INDIVUDALS PLOTS
 
 # Function to generate summary tables for categorical variables
 summarize_categorical <- function(df, var_name) {
@@ -366,11 +382,13 @@ for (feature in key_categorical) {
     )
   
   print(cat_plot)
-  save_plot(cat_plot, paste0("07_categorical_", feature))
+  #save_plot(cat_plot, paste0("07_categorical_", feature))
 }
-
+#####----------------------------------------------------######----------------------------------------------------######
 # 4.3 Ordinal Features Analysis
 cat("\n### 4.3 Ordinal Features Analysis\n\n")
+
+#############################DOESNT WORK 
 
 # Define ordinal features and their order
 ordinal_features <- list(
@@ -421,13 +439,13 @@ for (i in seq_along(ordinal_features)) {
       )
     
     print(ord_plot)
-    save_plot(ord_plot, paste0("08_ordinal_", feature))
+    #save_plot(ord_plot, paste0("08_ordinal_", feature))
     
     # Store the plot for later grid arrangement
     ordinal_plots[[feature]] <- ord_plot
   }
 }
-
+#####----------------------------------------------------######----------------------------------------------------######
 # 4.4 Numeric Features Analysis
 cat("\n### 4.4 Numeric Features Analysis\n\n")
 
@@ -454,11 +472,12 @@ for (feature in numeric_features) {
     )
   
   print(hist_plot)
-  save_plot(hist_plot, paste0("09_numeric_", feature))
+  #save_plot(hist_plot, paste0("09_numeric_", feature))
 }
+#####----------------------------------------------------######----------------------------------------------------######
 
 # -----------------------------------------------------
-# 5. RELATIONSHIP WITH TARGET VARIABLES. #needs improvemnt
+# 5. RELATIONSHIP WITH TARGET VARIABLES
 # -----------------------------------------------------
 cat("\n## 5. RELATIONSHIP WITH TARGET VARIABLES\n\n")
 
@@ -649,52 +668,54 @@ for (feature in ordinal_names) {
     save_plot(ord_h1n1_plot, paste0("14_ord_h1n1_", feature))
     
     print(ord_seasonal_plot)
-    save_plot(ord_seasonal_plot, paste0("15_ord_seasonal_", feature))
+    #save_plot(ord_seasonal_plot, paste0("15_ord_seasonal_", feature))
   }
 }
 
 # 5.4 Numeric Features vs. Target Variables
 cat("\n### 5.4 Numeric Features vs. Target\n\n")
 
-# Create box plots for each numeric feature vs target variables
+# Analyze relationship between numeric features and target variables
 for (feature in numeric_features) {
-  # H1N1 boxplot
-  num_h1n1_box <- ggplot(df_updated, aes(x = factor(h1n1_vaccine), y = .data[[feature]], fill = factor(h1n1_vaccine))) +
-    geom_boxplot() +
-    scale_fill_manual(values = cb_palette[c(1, 7)]) +
-    labs(
-      title = paste(feature, "Distribution by H1N1 Vaccination Status"),
-      x = "H1N1 Vaccine (1 = Yes, 0 = No)",
-      y = feature,
-      fill = "H1N1 Vaccine"
-    ) +
-    theme(legend.position = "none")
-  
-  # Seasonal boxplot
-  num_seasonal_box <- ggplot(df_updated, aes(x = factor(seasonal_vaccine), y = .data[[feature]], fill = factor(seasonal_vaccine))) +
-    geom_boxplot() +
-    scale_fill_manual(values = cb_palette[c(3, 5)]) +
-    labs(
-      title = paste(feature, "Distribution by Seasonal Flu Vaccination Status"),
-      x = "Seasonal Vaccine (1 = Yes, 0 = No)",
-      y = feature,
-      fill = "Seasonal Vaccine"
-    ) +
-    theme(legend.position = "none")
-  
-  print(num_h1n1_box)
-  save_plot(num_h1n1_box, paste0("16_num_h1n1_", feature))
-  
-  print(num_seasonal_box)
-  save_plot(num_seasonal_box, paste0("17_num_seasonal_", feature))
-  
-  # Add statistical test
-  h1n1_test <- wilcox.test(df_updated[[feature]] ~ df_updated$h1n1_vaccine)
-  seasonal_test <- wilcox.test(df_updated[[feature]] ~ df_updated$seasonal_vaccine)
-  
-  cat("\nStatistical test for", feature, "by vaccination status:\n")
-  cat("H1N1 vaccine: p-value =", round(h1n1_test$p.value, 4), "\n")
-  cat("Seasonal vaccine: p-value =", round(seasonal_test$p.value, 4), "\n")
+  if (feature %in% names(df_updated)) {
+    # Create summary by feature value
+    num_summary <- df_updated %>%
+      group_by(.data[[feature]]) %>%
+      summarise(
+        count = n(),
+        h1n1_rate = mean(h1n1_vaccine == 1, na.rm = TRUE) * 100,
+        seasonal_rate = mean(seasonal_vaccine == 1, na.rm = TRUE) * 100,
+        .groups = "drop"
+      )
+    
+    # Create plot for H1N1 vaccination rates
+    num_h1n1_plot <- ggplot(num_summary, aes(x = .data[[feature]], y = h1n1_rate, size = count)) +
+      geom_point(color = cb_palette[3], alpha = 0.7) +
+      geom_text(aes(label = sprintf("%.1f%%", h1n1_rate)), vjust = -1.5, size = 3) +
+      labs(
+        title = paste("H1N1 Vaccination Rate by", feature),
+        x = feature,
+        y = "H1N1 Vaccination Rate (%)",
+        size = "Count"
+      )
+    
+    # Create plot for seasonal vaccination rates
+    num_seasonal_plot <- ggplot(num_summary, aes(x = .data[[feature]], y = seasonal_rate, size = count)) +
+      geom_point(color = cb_palette[5], alpha = 0.7) +
+      geom_text(aes(label = sprintf("%.1f%%", seasonal_rate)), vjust = -1.5, size = 3) +
+      labs(
+        title = paste("Seasonal Flu Vaccination Rate by", feature),
+        x = feature,
+        y = "Seasonal Flu Vaccination Rate (%)",
+        size = "Count"
+      )
+    
+    print(num_h1n1_plot)
+    #save_plot(num_h1n1_plot, paste0("16_num_h1n1_", feature))
+    
+    print(num_seasonal_plot)
+    #save_plot(num_seasonal_plot, paste0("17_num_seasonal_", feature))
+  }
 }
 
 # -----------------------------------------------------
@@ -702,586 +723,513 @@ for (feature in numeric_features) {
 # -----------------------------------------------------
 cat("\n## 6. CORRELATION ANALYSIS\n\n")
 
-# 6.1 Correlation between numeric features
-cat("### 6.1 Correlation Between Numeric Features\n\n")
+# Convert categorical variables to numeric for correlation analysis
+df_corr <- df_updated %>%
+  mutate(across(where(is.factor), as.numeric)) %>%
+  select(-respondent_id) # Remove ID column which has no correlation relevance
 
-if (length(numeric_features) > 1) {
-  numeric_cor <- cor(df_updated[numeric_features], use = "pairwise.complete.obs")
-  
-  cat("Correlation matrix for numeric features:\n")
-  print_table(numeric_cor)
-  
-  # Create correlation plot
-  corrplot(numeric_cor, method = "color", type = "upper", 
-           order = "hclust", tl.col = "black", tl.srt = 45,
-           addCoef.col = "black", number.cex = 0.7,
-           col = colorRampPalette(c("#6D9EC1", "white", "#E46726"))(200))
-}
+# Calculate correlation matrix
+corr_matrix <- cor(df_corr, use = "pairwise.complete.obs")
 
-# 6.2 Point-biserial correlation (between binary and numeric features)
-cat("\n### 6.2 Point-biserial Correlation\n\n")
+# Visualize correlation matrix (using a better colorblind-friendly approach)
+corrplot(corr_matrix, method = "color", type = "upper", 
+         col = viridis(100, option = "D"),
+         tl.col = "black", tl.srt = 45, tl.cex = 0.7,
+         title = "Correlation Matrix of All Features",
+         mar = c(0, 0, 2, 0),
+         addCoef.col = "black", number.cex = 0.6)
 
-# Prepare data for correlation analysis
-binary_numeric_data <- df_updated %>%
-  select(all_of(c(binary_features, numeric_features))) %>%
-  mutate(across(all_of(binary_features), as.numeric, .names = "numeric_{.col}")) %>%
-  select(-all_of(binary_features))
+# Create a filtered correlation matrix focusing on strongest correlations with target variables
+h1n1_corr <- corr_matrix[, "h1n1_vaccine"]
+seasonal_corr <- corr_matrix[, "seasonal_vaccine"]
 
-# Calculate correlation matrix for point-biserial correlation
-if (ncol(binary_numeric_data) > 1) {
-  pb_cor <- cor(binary_numeric_data, use = "pairwise.complete.obs")
-  
-  # Filter to show only relevant correlations (binary vs numeric)
-  binary_cols <- grep("^numeric_", colnames(pb_cor), value = TRUE)
-  numeric_cols <- setdiff(colnames(pb_cor), binary_cols)
-  
-  pb_cor_subset <- pb_cor[binary_cols, numeric_cols, drop = FALSE]
-  
-  cat("Point-biserial correlation between binary and numeric features:\n")
-  print_table(pb_cor_subset)
-}
+# Create a dataframe of correlations with target variables
+target_corr_df <- data.frame(
+  feature = names(h1n1_corr),
+  h1n1_corr = h1n1_corr,
+  seasonal_corr = seasonal_corr
+) %>%
+  filter(feature != "h1n1_vaccine" & feature != "seasonal_vaccine") %>%
+  arrange(desc(abs(h1n1_corr)))
 
-# 6.3 Correlation of ordinal features 
-cat("\n### 6.3 Correlation of Ordinal Features\n\n")
+# Show top correlations with target variables
+cat("\nTop correlations with H1N1 vaccine:\n")
+print_table(target_corr_df %>% select(feature, h1n1_corr) %>% head(15))
 
-# Convert ordinal features to numeric for correlation analysis
-ordinal_numeric <- df_updated %>%
-  select(all_of(ordinal_names)) %>%
-  mutate(across(everything(), ~ as.numeric(.)))
+cat("\nTop correlations with seasonal flu vaccine:\n")
+print_table(target_corr_df %>% select(feature, seasonal_corr) %>% arrange(desc(abs(seasonal_corr))) %>% head(15))
 
-# Calculate correlations
-if (ncol(ordinal_numeric) > 1) {
-  ord_cor <- cor(ordinal_numeric, use = "pairwise.complete.obs")
-  
-  cat("Correlation matrix for ordinal features:\n")
-  print_table(ord_cor)
-  
-  # Create correlation plot 
-  corrplot(ord_cor, method = "color", type = "upper", 
-           order = "hclust", tl.col = "black", tl.srt = 45,
-           addCoef.col = "black", number.cex = 0.7,
-           col = colorRampPalette(c("#6D9EC1", "white", "#E46726"))(200))
-  
-  # Save plot
-  dev.print(png, "plots/18_ordinal_correlation.png", width = 10, height = 8, unit = "in", res = 300)
-}
-
-# 6.4 Create correlation with target variables
-cat("\n### 6.4 Correlation with Target Variables\n\n")
-
-# Prepare data for target correlation analysis
-target_corr_data <- df_updated %>%
-  select(h1n1_vaccine, seasonal_vaccine) %>%
+# Create visualization of correlations with target variables
+target_corr_plot <- target_corr_df %>%
+  pivot_longer(cols = c(h1n1_corr, seasonal_corr), names_to = "target", values_to = "correlation") %>%
   mutate(
-    h1n1_vaccine = as.numeric(as.character(h1n1_vaccine)),
-    seasonal_vaccine = as.numeric(as.character(seasonal_vaccine))
-  )
-
-# Combine with numeric features
-if (length(numeric_features) > 0) {
-  numeric_target_data <- bind_cols(
-    df_updated %>% select(all_of(numeric_features)),
-    target_corr_data
-  )
-  
-  # Calculate correlations with target
-  numeric_target_cor <- cor(numeric_target_data, use = "pairwise.complete.obs")
-  
-  cat("Correlation of numeric features with target variables:\n")
-  print_table(numeric_target_cor[1:length(numeric_features), (length(numeric_features)+1):ncol(numeric_target_cor)])
-}
-
-# Correlation of ordinal features with target
-if (length(ordinal_names) > 0) {
-  ordinal_target_data <- bind_cols(
-    ordinal_numeric,
-    target_corr_data
-  )
-  
-  # Calculate correlations with target
-  ordinal_target_cor <- cor(ordinal_target_data, use = "pairwise.complete.obs")
-  
-  cat("\nCorrelation of ordinal features with target variables:\n")
-  print_table(ordinal_target_cor[1:length(ordinal_names), (length(ordinal_names)+1):ncol(ordinal_target_cor)])
-}
-
-# -----------------------------------------------------
-# 7. OUTLIER ANALYSIS
-# -----------------------------------------------------
-cat("\n## 7. OUTLIER ANALYSIS\n\n")
-
-# Function to identify outliers using IQR method
-identify_outliers <- function(x) {
-  q1 <- quantile(x, 0.25, na.rm = TRUE)
-  q3 <- quantile(x, 0.75, na.rm = TRUE)
-  iqr <- q3 - q1
-  lower_bound <- q1 - 1.5 * iqr
-  upper_bound <- q3 + 1.5 * iqr
-  
-  outliers <- which(x < lower_bound | x > upper_bound)
-  return(list(
-    outliers = outliers,
-    lower_bound = lower_bound,
-    upper_bound = upper_bound,
-    count = length(outliers),
-    percent = length(outliers) / length(x[!is.na(x)]) * 100
-  ))
-}
-
-# Apply outlier detection to numeric features
-outlier_summary <- data.frame(
-  feature = character(),
-  count = integer(),
-  percent = numeric(),
-  lower_bound = numeric(),
-  upper_bound = numeric(),
-  stringsAsFactors = FALSE
-)
-
-for (feature in numeric_features) {
-  outlier_info <- identify_outliers(df_updated[[feature]])
-  
-  outlier_summary <- rbind(
-    outlier_summary,
-    data.frame(
-      feature = feature,
-      count = outlier_info$count,
-      percent = outlier_info$percent,
-      lower_bound = outlier_info$lower_bound,
-      upper_bound = outlier_info$upper_bound
-    )
-  )
-  
-  # Create boxplot with outliers highlighted
-  outlier_plot <- ggplot(df_updated, aes(y = .data[[feature]])) +
-    geom_boxplot(fill = cb_palette[2], outlier.color = "red", outlier.shape = 16, outlier.size = 3) +
-    geom_text(
-      data = data.frame(
-        y = c(outlier_info$lower_bound, outlier_info$upper_bound),
-        label = c(paste("Lower bound:", round(outlier_info$lower_bound, 2)),
-                  paste("Upper bound:", round(outlier_info$upper_bound, 2))),
-        x = c(0, 0)
-      ),
-      aes(x = x, y = y, label = label),
-      hjust = -0.1, size = 3
-    ) +
-    labs(
-      title = paste("Boxplot of", feature, "with Outliers Highlighted"),
-      subtitle = paste0(outlier_info$count, " outliers (", round(outlier_info$percent, 1), "%)"),
-      x = NULL,
-      y = feature
-    ) +
-    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
-  
-  print(outlier_plot)
-  #save_plot(outlier_plot, paste0("19_outliers_", feature))
-  
-  # Analyze relationship between outliers and target
-  if (outlier_info$count > 0) {
-    is_outlier <- rep(FALSE, nrow(df_updated))
-    is_outlier[outlier_info$outliers] <- TRUE
-    
-    outlier_target <- data.frame(
-      is_outlier = is_outlier,
-      h1n1_vaccine = df_updated$h1n1_vaccine,
-      seasonal_vaccine = df_updated$seasonal_vaccine
-    )
-    
-    # Test association between outliers and target
-    h1n1_test <- chisq.test(table(outlier_target$is_outlier, outlier_target$h1n1_vaccine))
-    seasonal_test <- chisq.test(table(outlier_target$is_outlier, outlier_target$seasonal_vaccine))
-    
-    cat("\nRelationship between outliers in", feature, "and target variables:\n")
-    cat("H1N1 vaccine: chi-squared p-value =", round(h1n1_test$p.value, 4), "\n")
-    cat("Seasonal vaccine: chi-squared p-value =", round(seasonal_test$p.value, 4), "\n")
-  }
-}
-
-cat("\nSummary of outliers in numeric features:\n")
-print_table(outlier_summary)
-
-# -----------------------------------------------------
-# 8. FEATURE IMPORTANCE ANALYSIS
-# -----------------------------------------------------
-cat("\n## 8. FEATURE IMPORTANCE ANALYSIS\n\n")
-
-# 8.1 Univariate feature importance using chi-squared test for categorical features
-cat("### 8.1 Univariate Feature Importance (Chi-Squared Test)\n\n")
-
-# Function to calculate chi-squared test
-calculate_chi_sq <- function(feature, target) {
-  # Create contingency table
-  cont_table <- table(feature, target)
-  
-  # Skip if not enough data
-  if (nrow(cont_table) < 2 || ncol(cont_table) < 2) {
-    return(list(p_value = NA, chi_sq = NA))
-  }
-  
-  # Calculate chi-squared test
-  test <- chisq.test(cont_table, simulate.p.value = TRUE)
-  
-  return(list(p_value = test$p.value, chi_sq = test$statistic))
-}
-
-# Apply chi-squared test to categorical features
-categorical_importance <- data.frame(
-  feature = character(),
-  chi_sq_h1n1 = numeric(),
-  p_value_h1n1 = numeric(),
-  chi_sq_seasonal = numeric(),
-  p_value_seasonal = numeric(),
-  stringsAsFactors = FALSE
-)
-
-all_cat_features <- c(categorical_features, binary_features)
-
-for (feature in all_cat_features) {
-  if (feature %in% names(df_updated) && feature != "h1n1_vaccine" && feature != "seasonal_vaccine") {
-    # Calculate chi-squared test for H1N1 vaccine
-    h1n1_test <- calculate_chi_sq(df_updated[[feature]], df_updated$h1n1_vaccine)
-    
-    # Calculate chi-squared test for seasonal vaccine
-    seasonal_test <- calculate_chi_sq(df_updated[[feature]], df_updated$seasonal_vaccine)
-    
-    # Add to data frame
-    categorical_importance <- rbind(
-      categorical_importance,
-      data.frame(
-        feature = feature,
-        chi_sq_h1n1 = h1n1_test$chi_sq,
-        p_value_h1n1 = h1n1_test$p_value,
-        chi_sq_seasonal = seasonal_test$chi_sq,
-        p_value_seasonal = seasonal_test$p_value
-      )
-    )
-  }
-}
-
-# Sort by importance for H1N1 vaccine
-categorical_importance <- categorical_importance %>%
-  arrange(p_value_h1n1)
-
-cat("Chi-squared test results for categorical features:\n")
-print_table(categorical_importance)
-
-# Plot top 15 features for H1N1 vaccine
-top_h1n1_features <- categorical_importance %>%
-  filter(!is.na(chi_sq_h1n1)) %>%
-  top_n(15, chi_sq_h1n1) %>%
-  mutate(feature = fct_reorder(feature, chi_sq_h1n1))
-
-h1n1_importance_plot <- ggplot(top_h1n1_features, aes(x = feature, y = chi_sq_h1n1)) +
-  geom_bar(stat = "identity", fill = cb_palette[2]) +
+    feature = reorder(feature, abs(correlation)),
+    target = factor(target, labels = c("H1N1", "Seasonal"))
+  ) %>%
+  ggplot(aes(x = feature, y = correlation, fill = target)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = cb_palette[c(3, 5)]) +
   coord_flip() +
   labs(
-    title = "Top Features for H1N1 Vaccination",
-    subtitle = "Based on chi-squared test statistic",
+    title = "Correlation with Target Variables",
+    subtitle = "Features sorted by absolute correlation with H1N1 vaccine",
     x = "Feature",
-    y = "Chi-squared statistic"
-  )
+    y = "Correlation Coefficient",
+    fill = "Target"
+  ) +
+  theme(axis.text.y = element_text(size = 8))
 
-print(h1n1_importance_plot)
-#save_plot(h1n1_importance_plot, "20_chi_squared_h1n1")
+print(target_corr_plot)
+#save_plot(target_corr_plot, "18_target_correlations")
 
-# Plot top 15 features for seasonal vaccine
-top_seasonal_features <- categorical_importance %>%
-  filter(!is.na(chi_sq_seasonal)) %>%
-  top_n(15, chi_sq_seasonal) %>%
-  mutate(feature = fct_reorder(feature, chi_sq_seasonal))
+# Feature correlations (excluding targets)
+feature_corr_matrix <- cor(df_corr %>% select(-h1n1_vaccine, -seasonal_vaccine), 
+                           use = "pairwise.complete.obs")
 
-seasonal_importance_plot <- ggplot(top_seasonal_features, aes(x = feature, y = chi_sq_seasonal)) +
-  geom_bar(stat = "identity", fill = cb_palette[4]) +
-  coord_flip() +
-  labs(
-    title = "Top Features for Seasonal Flu Vaccination",
-    subtitle = "Based on chi-squared test statistic",
-    x = "Feature",
-    y = "Chi-squared statistic"
-  )
+# Find highly correlated feature pairs (excluding targets)
+high_corr_pairs <- which(abs(feature_corr_matrix) > 0.5 & abs(feature_corr_matrix) < 1, arr.ind = TRUE)
+high_corr_df <- data.frame(
+  row = rownames(feature_corr_matrix)[high_corr_pairs[, 1]],
+  column = colnames(feature_corr_matrix)[high_corr_pairs[, 2]],
+  correlation = feature_corr_matrix[high_corr_pairs]
+) %>%
+  filter(row < column) %>% # Remove duplicates
+  arrange(desc(abs(correlation)))
 
-print(seasonal_importance_plot)
-#save_plot(seasonal_importance_plot, "21_chi_squared_seasonal")
+cat("\nHighly correlated feature pairs (|correlation| > 0.5):\n")
+print_table(high_corr_df)
 
-# 8.2 Basic Random Forest Feature Importance
-cat("\n### 8.2 Random Forest Feature Importance\n\n")
+# -----------------------------------------------------
+# 7. DATA LEAKAGE ANALYSIS
+# -----------------------------------------------------
+cat("\n## 7. DATA LEAKAGE ANALYSIS\n\n")
 
-# Prepare data for Random Forest
-model_data <- df_updated %>%
-  select(-respondent_id) %>%
-  na.omit()
+cat("Evaluating potential sources of data leakage in the dataset\n\n")
 
-# Check if we have enough data after removing missing values
-if (nrow(model_data) > 100) {
-  # Convert categorical variables to factors
-  model_data <- model_data %>%
-    mutate(across(where(is.character), as.factor))
-  
-  # Install and load randomForest if not already installed
-  if (!require(randomForest)) {
-    install.packages("randomForest")
-    library(randomForest)
+# 7.1 Target Leakage Assessment
+cat("### 7.1 Target Leakage Assessment\n\n")
+
+cat("Target leakage occurs when variables that would not be available at prediction time are included in the training data. Examining potential sources:\n\n")
+
+# Check for direct indicators of target variables
+potential_leaky_features <- c(
+  "doctor_recc_h1n1", "doctor_recc_seasonal",
+  "opinion_h1n1_vacc_effective", "opinion_seas_vacc_effective",
+  "opinion_h1n1_sick_from_vacc", "opinion_seas_sick_from_vacc"
+)
+
+cat("Potential features that might indicate target leakage:\n\n")
+for (feature in potential_leaky_features) {
+  if (feature %in% names(df_updated)) {
+    # Calculate correlation with target variables
+    h1n1_cor <- cor(as.numeric(df_updated[[feature]]), as.numeric(df_updated$h1n1_vaccine), 
+                    use = "pairwise.complete.obs")
+    seasonal_cor <- cor(as.numeric(df_updated[[feature]]), as.numeric(df_updated$seasonal_vaccine), 
+                        use = "pairwise.complete.obs")
+    
+    cat(sprintf("- %s: Correlation with H1N1 vaccine = %.3f, with seasonal vaccine = %.3f\n", 
+                feature, h1n1_cor, seasonal_cor))
+    
+    # Check if doctor recommendation is too predictive (could indicate data collected after vaccination)
+    if (grepl("doctor_recc", feature)) {
+      # Calculate conditional probabilities
+      probs <- df_updated %>%
+        filter(!is.na(.data[[feature]]) & !is.na(if (grepl("h1n1", feature)) h1n1_vaccine else seasonal_vaccine)) %>%
+        group_by(.data[[feature]]) %>%
+        summarise(
+          vaccine_rate = mean(if (grepl("h1n1", feature)) h1n1_vaccine == 1 else seasonal_vaccine == 1),
+          count = n(),
+          .groups = "drop"
+        )
+      
+      print_table(probs)
+      
+      if (max(probs$vaccine_rate) > 0.9) {
+        cat("  WARNING: This feature appears highly predictive of the target. Consider whether this\n")
+        cat("  information would actually be available at prediction time or if it might represent\n")
+        cat("  data collected after the vaccination decision was made.\n\n")
+      }
+    }
+    
+    # Check relationship between opinion variables and vaccination
+    if (grepl("opinion", feature)) {
+      # Calculate vaccination rates by opinion level
+      opinion_rates <- df_updated %>%
+        group_by(.data[[feature]]) %>%
+        summarise(
+          h1n1_rate = mean(h1n1_vaccine == 1, na.rm = TRUE),
+          seasonal_rate = mean(seasonal_vaccine == 1, na.rm = TRUE),
+          count = n(),
+          .groups = "drop"
+        )
+      
+      print_table(opinion_rates)
+      
+      if (grepl("h1n1", feature) && max(opinion_rates$h1n1_rate) > 0.8) {
+        cat("  WARNING: This H1N1 opinion feature has a very strong relationship with H1N1 vaccination.\n")
+        cat("  Verify that these opinions were collected before vaccination decisions were made.\n\n")
+      }
+      
+      if (grepl("seas", feature) && max(opinion_rates$seasonal_rate) > 0.8) {
+        cat("  WARNING: This seasonal flu opinion feature has a very strong relationship with seasonal vaccination.\n")
+        cat("  Verify that these opinions were collected before vaccination decisions were made.\n\n")
+      }
+    }
   }
-  
-  # Train Random Forest for H1N1 vaccine
-  set.seed(123)
-  rf_h1n1 <- randomForest(
-    h1n1_vaccine ~ ., 
-    data = model_data %>% select(-seasonal_vaccine),
-    importance = TRUE,
-    ntree = 100
-  )
-  
-  # Train Random Forest for seasonal vaccine
-  set.seed(123)
-  rf_seasonal <- randomForest(
-    seasonal_vaccine ~ ., 
-    data = model_data %>% select(-h1n1_vaccine),
-    importance = TRUE,
-    ntree = 100
-  )
-  
-  # Get feature importance
-  h1n1_importance <- importance(rf_h1n1) %>%
-    as.data.frame() %>%
-    mutate(feature = rownames(.)) %>%
-    arrange(desc(MeanDecreaseGini))
-  
-  seasonal_importance <- importance(rf_seasonal) %>%
-    as.data.frame() %>%
-    mutate(feature = rownames(.)) %>%
-    arrange(desc(MeanDecreaseGini))
-  
-  cat("Random Forest feature importance for H1N1 vaccine:\n")
-  print_table(h1n1_importance %>% select(feature, MeanDecreaseGini))
-  
-  cat("\nRandom Forest feature importance for seasonal vaccine:\n")
-  print_table(seasonal_importance %>% select(feature, MeanDecreaseGini))
-  
-  # Plot top 15 features for H1N1 vaccine
-  h1n1_rf_plot <- ggplot(
-    h1n1_importance %>% top_n(15, MeanDecreaseGini),
-    aes(x = reorder(feature, MeanDecreaseGini), y = MeanDecreaseGini)
-  ) +
-    geom_bar(stat = "identity", fill = cb_palette[3]) +
-    coord_flip() +
-    labs(
-      title = "Random Forest Feature Importance for H1N1 Vaccine",
-      x = "Feature",
-      y = "Mean Decrease in Gini Index"
-    )
-  
-  print(h1n1_rf_plot)
-  save_plot(h1n1_rf_plot, "22_rf_importance_h1n1")
-  
-  # Plot top 15 features for seasonal vaccine
-  seasonal_rf_plot <- ggplot(
-    seasonal_importance %>% top_n(15, MeanDecreaseGini),
-    aes(x = reorder(feature, MeanDecreaseGini), y = MeanDecreaseGini)
-  ) +
-    geom_bar(stat = "identity", fill = cb_palette[5]) +
-    coord_flip() +
-    labs(
-      title = "Random Forest Feature Importance for Seasonal Flu Vaccine",
-      x = "Feature",
-      y = "Mean Decrease in Gini Index"
-    )
-  
-  print(seasonal_rf_plot)
-  #save_plot(seasonal_rf_plot, "23_rf_importance_seasonal")
+}
+
+# 7.2 Feature Correlation with ID
+cat("\n### 7.2 Feature Correlation with ID\n\n")
+
+cat("Checking if respondent_id has any unexpected correlations with features (should be random):\n\n")
+
+# Check if ID has any pattern with features
+id_correlations <- df_updated %>%
+  mutate(across(where(is.factor), as.numeric)) %>%
+  select(-h1n1_vaccine, -seasonal_vaccine) %>% # Remove targets
+  select_if(is.numeric) %>% # Select only numeric columns
+  cor("respondent_id", use = "pairwise.complete.obs")
+
+# Look for any non-zero correlations with ID
+id_corr_df <- data.frame(
+  feature = rownames(id_correlations),
+  correlation = id_correlations[, "respondent_id"]
+) %>%
+  filter(feature != "respondent_id") %>%
+  arrange(desc(abs(correlation)))
+
+# Print top correlations with ID (should all be very close to zero)
+print_table(id_corr_df %>% head(10))
+
+if (max(abs(id_corr_df$correlation)) > 0.05) {
+  cat("WARNING: Some features show non-random correlation with respondent_id.\n")
+  cat("This might indicate a data collection issue or non-random assignment.\n\n")
 } else {
-  cat("Not enough data for Random Forest feature importance after removing missing values.\n")
+  cat("No significant correlations found between features and respondent_id.\n")
+  cat("This confirms that IDs appear to be randomly assigned as expected.\n\n")
 }
 
-# -----------------------------------------------------
-# 9. FEATURE RELATIONSHIPS AND INTERACTIONS
-# -----------------------------------------------------
-cat("\n## 9. FEATURE RELATIONSHIPS AND INTERACTIONS\n\n")
+# 7.3 Train-Test Distribution Comparison
+cat("\n### 7.3 Train-Test Distribution Comparison\n\n")
 
-# 9.1 Analyze relationships between key categorical features
-cat("### 9.1 Relationships Between Key Categorical Features\n\n")
+cat("Comparing the distributions of features between training and test sets to detect potential issues:\n\n")
 
-# Identify key categorical features that might interact
-key_cat_pairs <- list(
-  c("h1n1_concern", "opinion_h1n1_risk"),
-  c("doctor_recc_h1n1", "opinion_h1n1_vacc_effective"),
-  c("doctor_recc_seasonal", "opinion_seas_vacc_effective"),
-  c("chronic_med_condition", "health_worker"),
-  c("age_group", "education"),
-  c("age_group", "income_poverty")
-)
-
-# Analyze each pair
-for (pair in key_cat_pairs) {
-  if (all(pair %in% names(df_updated))) {
-    feature1 <- pair[1]
-    feature2 <- pair[2]
+# Function to compare distributions between train and test
+compare_distributions <- function(feature, train_df, test_df) {
+  # For numeric features, compare summary statistics
+  if (is.numeric(train_df[[feature]])) {
+    train_summary <- summary(train_df[[feature]])
+    test_summary <- summary(test_df[[feature]])
+    
+    # Calculate KS test statistic for distributional difference
+    ks_result <- ks.test(train_df[[feature]], test_df[[feature]])
+    
+    result <- data.frame(
+      feature = feature,
+      train_mean = mean(train_df[[feature]], na.rm = TRUE),
+      test_mean = mean(test_df[[feature]], na.rm = TRUE),
+      train_sd = sd(train_df[[feature]], na.rm = TRUE),
+      test_sd = sd(test_df[[feature]], na.rm = TRUE),
+      ks_statistic = ks_result$statistic,
+      p_value = ks_result$p.value
+    )
+    
+    return(result)
+  } else {
+    # For categorical/factor features, compare proportions
+    train_props <- prop.table(table(train_df[[feature]]))
+    test_props <- prop.table(table(test_df[[feature]]))
+    
+    # Calculate chi-square test for distributional difference
+    # Convert to contingency table first
+    train_counts <- table(train_df[[feature]])
+    test_counts <- table(test_df[[feature]])
+    
+    # Make sure both have the same levels
+    all_levels <- unique(c(names(train_counts), names(test_counts)))
+    train_vec <- numeric(length(all_levels))
+    test_vec <- numeric(length(all_levels))
+    names(train_vec) <- all_levels
+    names(test_vec) <- all_levels
+    
+    train_vec[names(train_counts)] <- train_counts
+    test_vec[names(test_counts)] <- test_counts
     
     # Create contingency table
-    cat(paste("Relationship between", feature1, "and", feature2, ":\n"))
-    cont_table <- table(df_updated[[feature1]], df_updated[[feature2]])
-    print(cont_table)
+    cont_table <- rbind(train_vec, test_vec)
     
-    # Chi-squared test
-    chi_sq_test <- chisq.test(cont_table, simulate.p.value = TRUE)
-    cat("Chi-squared test: p-value =", round(chi_sq_test$p.value, 4), "\n\n")
+    # Perform chi-square test
+    chi_result <- tryCatch({
+      chisq.test(cont_table)
+    }, error = function(e) {
+      # If chi-square test fails, return NA
+      list(statistic = NA, p.value = NA)
+    })
     
-    # Create heatmap for the relationship
-    df_pair <- df_updated %>%
-      select(all_of(c(feature1, feature2))) %>%
-      filter(!is.na(.data[[feature1]]) & !is.na(.data[[feature2]])) %>%
-      count(.data[[feature1]], .data[[feature2]]) %>%
-      group_by(.data[[feature1]]) %>%
-      mutate(pct = n / sum(n) * 100) %>%
-      ungroup()
+    # Calculate max absolute difference in proportions
+    max_diff <- max(abs(train_props - test_props[names(train_props)]), na.rm = TRUE)
     
-    heatmap_plot <- ggplot(df_pair, aes(x = .data[[feature1]], y = .data[[feature2]], fill = pct)) +
-      geom_tile() +
-      geom_text(aes(label = sprintf("%.1f%%", pct)), size = 2.5) +
-      scale_fill_viridis_c(option = "D") +
-      labs(
-        title = paste("Relationship between", feature1, "and", feature2),
-        subtitle = paste("Chi-squared p-value =", round(chi_sq_test$p.value, 4)),
-        x = feature1,
-        y = feature2,
-        fill = "Percentage"
-      ) +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    result <- data.frame(
+      feature = feature,
+      max_prop_diff = max_diff,
+      chi_square = chi_result$statistic,
+      p_value = chi_result$p.value
+    )
     
-    print(heatmap_plot)
-    #save_plot(heatmap_plot, paste0("24_relationship_", feature1, "_", feature2), width = 12, height = 8)
+    return(result)
   }
 }
 
-# 9.2 Analyze feature interactions with target variables
-cat("\n### 9.2 Feature Interactions with Target Variables\n\n")
+# Prepare test data with same structure as training
+test_df <- data_test %>%
+  mutate(across(all_of(categorical_features), as.factor),
+         across(all_of(binary_features[binary_features != "h1n1_vaccine" & 
+                                         binary_features != "seasonal_vaccine"]), as.factor))
 
-# Define pairs to analyze for interaction with targets
-interaction_pairs <- list(
-  c("doctor_recc_h1n1", "opinion_h1n1_vacc_effective"),
-  c("doctor_recc_seasonal", "opinion_seas_vacc_effective"),
-  c("h1n1_concern", "opinion_h1n1_risk"),
-  c("age_group", "chronic_med_condition")
+# Compare distributions for a sample of features
+features_to_compare <- c(
+  sample(binary_features[binary_features != "h1n1_vaccine" & 
+                           binary_features != "seasonal_vaccine"], 5),
+  sample(categorical_features, 5),
+  numeric_features
 )
 
-# Analyze interactions with targets
-for (pair in interaction_pairs) {
-  if (all(pair %in% names(df_updated))) {
-    feature1 <- pair[1]
-    feature2 <- pair[2]
-    
-    # H1N1 vaccine interaction
-    h1n1_interaction <- df_updated %>%
-      filter(!is.na(.data[[feature1]]) & !is.na(.data[[feature2]]) & !is.na(h1n1_vaccine)) %>%
-      group_by(.data[[feature1]], .data[[feature2]]) %>%
-      summarise(
-        total = n(),
-        h1n1_rate = mean(h1n1_vaccine == 1) * 100,
-        .groups = "drop"
-      )
-    
-    h1n1_interaction_plot <- ggplot(h1n1_interaction, 
-                                    aes(x = .data[[feature1]], y = .data[[feature2]], fill = h1n1_rate)) +
-      geom_tile() +
-      geom_text(aes(label = sprintf("%.1f%%", h1n1_rate)), size = 2.5, color = "white") +
-      scale_fill_viridis_c(option = "D") +
-      labs(
-        title = paste("H1N1 Vaccination Rate by", feature1, "and", feature2),
-        x = feature1,
-        y = feature2,
-        fill = "H1N1 Vax Rate (%)"
-      ) +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1))
-    
-    print(h1n1_interaction_plot)
-    #save_plot(h1n1_interaction_plot, paste0("25_h1n1_interaction_", feature1, "_", feature2), width = 12, height = 8)
-    
-    # Seasonal vaccine interaction
-    seasonal_interaction <- df_updated %>%
-      filter(!is.na(.data[[feature1]]) & !is.na(.data[[feature2]]) & !is.na(seasonal_vaccine)) %>%
-      group_by(.data[[feature1]], .data[[feature2]]) %>%
-      summarise(
-        total = n(),
-        seasonal_rate = mean(seasonal_vaccine == 1) * 100,
-        .groups = "drop"
-      )
-    
-    seasonal_interaction_plot <- ggplot(seasonal_interaction, 
-                                        aes(x = .data[[feature1]], y = .data[[feature2]], fill = seasonal_rate)) +
-      geom_tile() +
-      geom_text(aes(label = sprintf("%.1f%%", seasonal_rate)), size = 2.5, color = "white") +
-      scale_fill_viridis_c(option = "D") +
-      labs(
-        title = paste("Seasonal Flu Vaccination Rate by", feature1, "and", feature2),
-        x = feature1,
-        y = feature2,
-        fill = "Seasonal Vax Rate (%)"
-      ) +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1))
-    
-    print(seasonal_interaction_plot)
-    #save_plot(seasonal_interaction_plot, paste0("26_seasonal_interaction_", feature1, "_", feature2), width = 12, height = 8)
-  }
+distribution_comparisons <- lapply(features_to_compare, compare_distributions, 
+                                   train_df = df_updated, test_df = test_df)
+distribution_comparison_df <- do.call(rbind, distribution_comparisons)
+
+cat("Comparison of feature distributions between training and test sets:\n\n")
+print_table(distribution_comparison_df)
+
+# Flag potential issues
+if (any(distribution_comparison_df$p_value < 0.01, na.rm = TRUE)) {
+  cat("\nWARNING: Some features show significantly different distributions between training and test sets.\n")
+  cat("This could indicate:\n")
+  cat("1. Temporal effects if data was collected over time\n")
+  cat("2. Issues with the train-test split process\n")
+  cat("3. Potential data leakage if splitting was not done randomly\n\n")
+  
+  # Show the problematic features
+  problematic_features <- distribution_comparison_df %>% 
+    filter(p_value < 0.01) %>% 
+    arrange(p_value)
+  
+  cat("Features with significantly different distributions (p < 0.01):\n")
+  print_table(problematic_features)
+} else {
+  cat("\nNo significant differences found in distributions between training and test sets.\n")
+  cat("This suggests the train-test split was likely performed correctly.\n\n")
 }
+
+# 7.4 Key Leakage Concerns Summary
+cat("\n### 7.4 Data Leakage Summary and Recommendations\n\n")
+
+cat("Based on the data leakage analysis, here are the key findings and recommendations:\n\n")
+
+# Chronological information check
+cat("1. Temporal Information:\n")
+cat("   - The dataset doesn't appear to contain explicit timestamps for data collection.\n")
+cat("   - However, survey responses about opinions on vaccines should be verified to ensure\n")
+cat("     they were collected prior to vaccination decisions.\n\n")
+
+# Doctor recommendation check
+cat("2. Doctor Recommendations:\n")
+cat("   - The features 'doctor_recc_h1n1' and 'doctor_recc_seasonal' show strong correlation with targets.\n")
+cat("   - Recommendation: Verify these represent recommendations made before vaccination decisions,\n")
+cat("     not post-hoc documentation of the vaccination process.\n\n")
+
+# Opinion variables check
+cat("3. Opinion Variables:\n")
+cat("   - Variables measuring opinions about vaccine effectiveness and risks are strongly correlated with targets.\n")
+cat("   - Recommendation: Consider whether these opinions could have been formed after vaccination\n")
+cat("     (which would constitute data leakage).\n\n")
+
+# Feature engineering caution
+cat("4. Feature Engineering Considerations:\n")
+cat("   - When creating new features, avoid using information that wouldn't be available at prediction time.\n")
+cat("   - Pay special attention to opinion and behavioral variables - ensure they represent pre-vaccination data.\n\n")
+
+# Train-test split recommendation
+cat("5. Model Validation Strategy:\n")
+cat("   - Use time-based validation if the data has a temporal component (not explicitly stated in the dataset).\n")
+cat("   - If using cross-validation, ensure the split strategy respects any potential temporal ordering.\n\n")
+
+cat("6. Final Recommendations:\n")
+cat("   - Perform feature selection with caution, being mindful of potential target leakage.\n")
+cat("   - Consider creating models with and without potentially problematic features to assess impact.\n")
+cat("   - Document assumptions about data collection timing in your final submission.\n\n")
 
 # -----------------------------------------------------
-# 10. SUMMARY AND RECOMMENDATIONS
+# 8. INSIGHTS AND FEATURE IMPORTANCE ANALYSIS
 # -----------------------------------------------------
-cat("\n## 10. SUMMARY AND RECOMMENDATIONS\n\n")
+cat("\n## 8. INSIGHTS AND FEATURE IMPORTANCE ANALYSIS\n\n")
 
-cat("### Key Findings:\n\n")
+# 8.1 Summary of Key Insights
+cat("### 8.1 Summary of Key Insights\n\n")
 
-cat("1. **Target Variable Distribution:**\n")
-cat("   - H1N1 vaccination rate: ", round(h1n1_rate, 1), "%\n")
-cat("   - Seasonal flu vaccination rate: ", round(seasonal_rate, 1), "%\n")
-cat("   - The seasonal flu vaccine has much higher uptake than the H1N1 vaccine\n\n")
+cat("Based on the comprehensive EDA, here are the key insights about factors affecting vaccination rates:\n\n")
 
-cat("2. **Missing Values:**\n")
-missing_features <- missing_summary %>% filter(missing > 0) %>% pull(feature)
-cat("   - Features with missing values: ", paste(missing_features, collapse = ", "), "\n")
-cat("   - Missing value patterns might require imputation strategies\n\n")
+cat("1. **Doctor Recommendations** have the strongest relationship with vaccination rates for both\n")
+cat("   H1N1 and seasonal flu vaccines. When a doctor recommends vaccination, the uptake rate\n")
+cat("   increases dramatically.\n\n")
 
-cat("3. **Important Features for H1N1 Vaccination:**\n")
-if (exists("h1n1_importance") && nrow(h1n1_importance) > 0) {
-  top5_h1n1 <- h1n1_importance %>% slice_head(n = 5) %>% pull(feature)
-  cat("   - Top 5 features: ", paste(top5_h1n1, collapse = ", "), "\n")
-}
-cat("   - Doctor recommendation and opinion on vaccine effectiveness are strong predictors\n\n")
+cat("2. **Opinion about Vaccine Effectiveness** is strongly correlated with vaccination rates.\n")
+cat("   People who believe vaccines are effective are much more likely to get vaccinated.\n\n")
 
-cat("4. **Important Features for Seasonal Flu Vaccination:**\n")
-if (exists("seasonal_importance") && nrow(seasonal_importance) > 0) {
-  top5_seasonal <- seasonal_importance %>% slice_head(n = 5) %>% pull(feature)
-  cat("   - Top 5 features: ", paste(top5_seasonal, collapse = ", "), "\n")
-}
-cat("   - Similar to H1N1, doctor recommendation and past vaccination behavior are key\n\n")
+cat("3. **Behavioral Factors**: People who take other preventive measures (like washing hands\n")
+cat("   or avoiding large gatherings) show different vaccination patterns than those who don't.\n\n")
 
-cat("5. **Feature Interactions:**\n")
-cat("   - Strong interactions between doctor recommendations and opinions on vaccine effectiveness\n")
-cat("   - Age group and chronic medical conditions show important interactions\n\n")
+cat("4. **Demographic Factors**: Age group, education level, and income show significant relationships\n")
+cat("   with vaccination rates, especially for seasonal flu vaccines.\n\n")
 
-cat("### Recommendations for Feature Engineering:\n\n")
+cat("5. **H1N1 Concern Level**: Higher concern about H1N1 correlates with higher vaccination rates\n")
+cat("   for the H1N1 vaccine but has a weaker relationship with seasonal flu vaccination.\n\n")
 
-cat("1. **Handle Missing Values:**\n")
-cat("   - Use multiple imputation or advanced methods for features with significant missingness\n")
-cat("   - Consider creating 'missing' indicators for features where missingness might be informative\n\n")
+cat("6. **Knowledge about H1N1**: Greater knowledge about H1N1 is associated with higher vaccination\n")
+cat("   rates for both H1N1 and seasonal flu vaccines.\n\n")
 
-cat("2. **Feature Transformations:**\n")
-cat("   - Group rare categories in categorical variables\n")
-cat("   - Create composite features for related behavioral variables\n")
-cat("   - Develop interaction terms for key feature pairs\n\n")
+cat("7. **Health Insurance**: Having health insurance shows a positive relationship with vaccination\n")
+cat("   rates, particularly for seasonal flu vaccines.\n\n")
 
-cat("3. **New Feature Creation:**\n")
-cat("   - Create risk scores combining multiple risk factors\n")
-cat("   - Develop opinion indices from multiple opinion questions\n")
-cat("   - Consider geographic clustering based on region\n\n")
+cat("8. **Employment Status**: Healthcare workers have higher vaccination rates for both vaccines\n")
+cat("   compared to other employment categories.\n\n")
 
-cat("4. **Modeling Approach:**\n")
-cat("   - Consider multi-label classification approaches\n")
-cat("   - Use models that handle missing data well (e.g., XGBoost)\n")
-cat("   - Evaluate performance separately for each target\n\n")
+# 8.2 Feature Importance Analysis
+cat("### 8.2 Feature Importance Analysis\n\n")
 
-cat("5. **Validation Strategy:**\n")
-cat("   - Use stratified cross-validation to maintain target distribution\n")
-cat("   - Consider time-based validation if temporal patterns exist\n\n")
+cat("To estimate feature importance without building a full model, we can use a simple\n")
+cat("decision tree to get an approximation of feature importance:\n\n")
 
-cat("\n--- End of EDA Report ---\n")
+# Train simple decision trees to estimate feature importance
+library(rpart)
+library(rpart.plot)
+
+# Prepare data for modeling
+model_data <- df_updated %>%
+  mutate(across(where(is.factor), as.numeric)) %>%
+  select(-respondent_id) %>%
+  na.omit()  # Simple handling of missing values for this demonstration
+
+# Train a decision tree for H1N1 vaccine
+h1n1_tree <- rpart(h1n1_vaccine ~ . - seasonal_vaccine, 
+                   data = model_data, 
+                   method = "class",
+                   control = rpart.control(maxdepth = 5))
+
+# Train a decision tree for seasonal vaccine
+seasonal_tree <- rpart(seasonal_vaccine ~ . - h1n1_vaccine, 
+                       data = model_data, 
+                       method = "class",
+                       control = rpart.control(maxdepth = 5))
+
+# Get variable importance
+h1n1_importance <- data.frame(
+  feature = names(h1n1_tree$variable.importance),
+  importance = h1n1_tree$variable.importance / sum(h1n1_tree$variable.importance) * 100
+) %>% 
+  arrange(desc(importance))
+
+seasonal_importance <- data.frame(
+  feature = names(seasonal_tree$variable.importance),
+  importance = seasonal_tree$variable.importance / sum(seasonal_tree$variable.importance) * 100
+) %>% 
+  arrange(desc(importance))
+
+# Print top features for H1N1
+cat("Top features for predicting H1N1 vaccination (based on decision tree):\n")
+print_table(h1n1_importance %>% head(10))
+
+# Print top features for seasonal flu
+cat("\nTop features for predicting seasonal flu vaccination (based on decision tree):\n")
+print_table(seasonal_importance %>% head(10))
+
+# Plot decision trees
+rpart.plot(h1n1_tree, main = "Decision Tree for H1N1 Vaccination", 
+           extra = 106, box.palette = "Blues", shadow.col = "gray")
+
+rpart.plot(seasonal_tree, main = "Decision Tree for Seasonal Flu Vaccination", 
+           extra = 106, box.palette = "Oranges", shadow.col = "gray")
+
+# Create importance plots
+h1n1_imp_plot <- ggplot(h1n1_importance %>% head(10), 
+                        aes(x = reorder(feature, importance), y = importance)) +
+  geom_bar(stat = "identity", fill = cb_palette[3]) +
+  coord_flip() +
+  labs(
+    title = "Top 10 Features for H1N1 Vaccination",
+    subtitle = "Based on decision tree importance",
+    x = "Feature",
+    y = "Relative Importance (%)"
+  )
+
+seasonal_imp_plot <- ggplot(seasonal_importance %>% head(10), 
+                            aes(x = reorder(feature, importance), y = importance)) +
+  geom_bar(stat = "identity", fill = cb_palette[5]) +
+  coord_flip() +
+  labs(
+    title = "Top 10 Features for Seasonal Flu Vaccination",
+    subtitle = "Based on decision tree importance",
+    x = "Feature",
+    y = "Relative Importance (%)"
+  )
+
+print(h1n1_imp_plot)
+save_plot(h1n1_imp_plot, "19_h1n1_importance")
+
+print(seasonal_imp_plot)
+save_plot(seasonal_imp_plot, "20_seasonal_importance")
+
+# -----------------------------------------------------
+# 9. CONCLUSION AND NEXT STEPS
+# -----------------------------------------------------
+cat("\n## 9. CONCLUSION AND NEXT STEPS\n\n")
+
+cat("### 9.1 Summary of Findings\n\n")
+
+cat("This comprehensive EDA has revealed several important patterns in the dataset:\n\n")
+
+cat("1. **Different Drivers**: H1N1 and seasonal flu vaccination behaviors share some common\n")
+cat("   drivers but also have distinct patterns, suggesting we should treat them as separate\n")
+cat("   prediction problems while leveraging their similarities.\n\n")
+
+cat("2. **Key Predictors**: Doctor recommendations, opinions about vaccine effectiveness, health\n")
+cat("   behaviors, and demographic factors appear to be the strongest predictors of vaccination.\n\n")
+
+cat("3. **Missing Data**: The dataset contains missing values in several features, with some\n")
+cat("   potentially showing non-random patterns of missingness that might be related to the target.\n\n")
+
+cat("4. **Potential Data Leakage**: Several features show very strong correlations with target\n")
+cat("   variables, which warrants careful consideration to avoid target leakage in the modeling phase.\n\n")
+
+cat("### 9.2 Recommended Next Steps\n\n")
+
+cat("Based on this EDA, here are recommendations for the modeling phase:\n\n")
+
+cat("1. **Feature Engineering**:\n")
+cat("   - Create interaction terms between doctor recommendations and opinions about vaccines\n")
+cat("   - Group less frequent categories in categorical variables\n")
+cat("   - Consider creating composite behavioral indices from related behavioral variables\n")
+cat("   - Engineer features capturing demographic profiles based on observed patterns\n\n")
+
+cat("2. **Handling Missing Data**:\n")
+cat("   - Use multiple imputation for features with missing values\n")
+cat("   - Consider adding 'missingness indicator' features for variables with high missingness\n")
+cat("   - For employment industry/occupation, consider grouping into broader categories before imputation\n\n")
+
+cat("3. **Addressing Class Imbalance**:\n")
+cat("   - H1N1 vaccination shows class imbalance with lower positive rates\n")
+cat("   - Consider techniques like SMOTE, class weighting, or calibration to address this\n\n")
+
+cat("4. **Modeling Approach**:\n")
+cat("   - Build separate models for H1N1 and seasonal flu vaccination\n")
+cat("   - Test both single models and ensemble approaches\n")
+cat("   - Consider a stacking approach that leverages predictions between the two targets\n")
+cat("   - Evaluate models using ROC AUC as per competition guidelines\n\n")
+
+cat("5. **Feature Selection and Validation**:\n")
+cat("   - Use proper cross-validation to avoid overfitting\n")
+cat("   - Consider removing or carefully treating features with potential data leakage\n")
+cat("   - Build models with different feature subsets to assess impact on performance\n\n")
+
+cat("This concludes the enhanced EDA for the Flu Shot Learning competition. The analysis provides\n")
+cat("a solid foundation for proceeding with feature engineering and model development.")
