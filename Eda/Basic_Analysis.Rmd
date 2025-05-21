@@ -15,6 +15,7 @@ library(readr)
 library(tidyverse)
 library(patchwork)
 library(forcats)
+library(naniar)
 theme_set(theme_minimal())
 ```
 
@@ -46,7 +47,20 @@ sum(is.na(data_test))
 
 ```
 
-```{r Clean Data}
+```{r Check if data imputation with median/mode is appopriate}
+
+# Perform a test for MCAR
+mcar_test(data_train)
+
+# p > 0.05 → Fail to reject the null hypothesis → Data is MCAR 
+# p ≤ 0.05 → Reject the null hypothesis → Data is MAR or MNAR (follows a pattern)
+# p-value here: 0.996 -> MCAR and median/mode imputation works
+# To avoid data leakage: apply on training set only
+
+```
+
+
+```{r Create mode function for missing data imputation}
 
 # Function to get the mode
 # Parameter:
@@ -61,26 +75,65 @@ mode <- function(x, na.rm = FALSE) {
   return(ux[which.max(tabulate(match(x, ux)))])
 }
 
-# Replace NA with mode (character)/median (numeric)
-data_train <- data_train %>%
-  mutate(across(where(is.character), ~ replace_na(.x, mode(., na.rm = TRUE))),
-         across(where(is.numeric), ~ replace_na(.x, median(., na.rm = TRUE))),
-         across(2:last_col(), factor))
+```
 
-sum(is.na(data_train))
+```{r Functions to detect outliers}
 
-# Change data types to factor
-data_train_labels <- data_train_labels %>% 
-  mutate(across(2:last_col(), factor))
+# Function that detects "categorical" outliers based on a threshold.
+# Parameters:
+# df: data frame that should be analysed
+# cat_threshold: the threshold, where a variable is considered to be an outlier
 
-# Repeat for test dataset
-data_test <- data_test %>%
-  mutate(across(where(is.character), ~ replace_na(.x, mode(., na.rm = TRUE))),
-         across(where(is.numeric), ~ replace_na(.x, median(., na.rm = TRUE))),
-         across(2:last_col(), factor))
+categorical_outliers <- function(df, cat_threshold = 0.01) {
+  
+  # Select all categorical columns
+  cat_cols <- df[sapply(df, function(x) is.character(x))]
+  
+  # Compute the proportions of the values in categorical columns and compare with threshold
+  # Frequencies < threshold are considered as outliers
+  lapply(cat_cols, function(col) {
+    freq <- prop.table(table(col))
+    rare <- names(freq[freq < cat_threshold])
+    list(rare_levels = rare, count = length(rare))
+  })
+}
 
-sum(is.na(data_test))
 
+# Function that detects "numerical" outliers based on an IQR multiplier.
+# Parameters:
+# df: data frame that should be analysed
+# iqr_multiplier: the factor used to identify an outlier
+
+numeric_outliers <- function(df, iqr_multiplier = 1.5) {
+  
+  # Select all numeric columns
+  num_cols <- df[sapply(df, is.numeric)]
+  
+  # Compute the quantiles and IQR and calculate the bounds
+  # Values outside of the bound are considered as outliers
+  lapply(num_cols, function(col) {
+    Q1 <- quantile(col, 0.25, na.rm = TRUE)
+    Q3 <- quantile(col, 0.75, na.rm = TRUE)
+    IQR <- Q3 - Q1
+    bounds <- c(lower = Q1 - iqr_multiplier * IQR, upper = Q3 + iqr_multiplier * IQR)
+    # Find indices of values that lie outside the bounds
+    out_idx <- which(col < bounds["lower"] | col > bounds["upper"])
+    list(outlier_count = length(out_idx), bounds = bounds)
+  })
+}
+
+# Apply the functions on the data:
+categorical_outliers(df = data_train, cat_threshold = 0.01)
+
+numeric_outliers(df = data_train, iqr_multiplier = 1.5)
+
+# Little amount of outliers
+# The outliers are still important and real. so leaving them in is better than removing them.
+
+```
+
+
+```{r Combine training data with training labels and reshape the data}
 
 # Combine Training Data with Training Labels
 data_train <- data_train %>%
@@ -124,8 +177,8 @@ cor(as.numeric(data_train$h1n1_vaccine),
 ```{r Check Proportions of Vaccines}
 
 ggplot(long_data) +
-  geom_bar(aes(x = vaccine,
-               fill = use),
+  geom_bar(aes(x = as.factor(vaccine),
+               fill = as.factor(use)),
            position = "fill") +
   labs(title = "Proportion of Vaccine Usage",
        x = " ",
