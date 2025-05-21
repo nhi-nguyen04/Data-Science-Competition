@@ -1,12 +1,15 @@
+
+#Packages we need
 library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(patchwork)
 library(scales)
 library(viridis)
-library(grid)   # for unit()
+library(grid)   
 
-# 1. theme
+# theme set up for now
+# probably going to change in the future
 custom_theme <- theme_minimal() +
   theme(
     text            = element_text(color = "#333333"),
@@ -23,17 +26,26 @@ custom_theme <- theme_minimal() +
   )
 theme_set(custom_theme)
 
-# 2. data
+#  loading the data 
 features_df <- read.csv("Data/training_set_features.csv")
 labels_df   <- read.csv("Data/training_set_labels.csv")
 
-# 3. correct color mapping
+lapply(features_df, unique)
+
+#the labels don't have to be processed
+lapply(labels_df, unique)
+
+
+# correct color mapping
 vaccine_colors <- c(
   "Not Vaccinated" = "#E15759",
   "Vaccinated"     = "#4E79A7"
 )
 
-# 4. plot function
+
+
+
+#plot function
 create_vaccine_plot <- function(data, vaccine_type) {
   var_name <- paste0(vaccine_type, "_vaccine")
   title    <- sprintf("%s Vaccination Status",
@@ -66,7 +78,7 @@ create_vaccine_plot <- function(data, vaccine_type) {
     ylim(0,100)
 }
 
-# 5. make & combine
+# create the plots  & combine them
 plot_h1n1     <- create_vaccine_plot(labels_df, "h1n1")
 plot_seasonal <- create_vaccine_plot(labels_df, "seasonal")
 
@@ -78,10 +90,34 @@ vaccine_plots <- plot_h1n1 + plot_seasonal +
                                             hjust = 0.5))
   )
 
-print(vaccine_plots)
+vaccine_plots
+
+
+
+
+# Observation
+# A bit over half of the individuals received the seasonal flu vaccine, while only about 21% received the H1N1 flu vaccine.
+# 
+# From a class distribution perspective, the seasonal flu vaccine target has balanced classes, whereas the H1N1 flu vaccine target shows a moderate class imbalance.
+# 
+# In machine learning, a class refers to a category or label — in this case:
+#   
+#   Got the vaccine = one class
+# 
+#   Didn't get the vaccine = the other class
+# 
+# Balanced Classes (Seasonal Flu Vaccine)
+# Since just over 50% of people received the seasonal flu vaccine and the rest did not, the dataset has a fairly even distribution between the two classes. This balance means the model will have a roughly equal number of examples for each outcome, making it easier to learn both cases effectively.
+# 
+# Moderately Imbalanced Classes (H1N1 Vaccine)
+# In contrast, only 21% of individuals received the H1N1 vaccine, while 79% did not. This leads to an imbalance, with one class (those who didn't get vaccinated) heavily outnumbering the other. Such imbalances can make it more difficult for the model to accurately learn and predict the minority class.
+# 
+# Why It Matters
+# Balanced data allows models to learn both outcomes more fairly and reliably. When classes are imbalanced, the model may default to predicting the majority class, resulting in poor performance on the less common — but potentially more important — cases.
 #------------------------------
 # 2. Improved Cross-Tabulation Analysis
 #------------------------------
+#Are the two target variables independent? Let's take a look.
 
 # Cross-tabulation with improved visualization
 labels_df <- labels_df %>%
@@ -107,7 +143,7 @@ names(cross_tab_prop_df) <- c("H1N1", "Seasonal", "Percentage")
 cross_tab_df$Percentage <- cross_tab_prop_df$Percentage
 cross_tab_df$Label <- paste0(cross_tab_df$Count, "\n(", round(cross_tab_df$Percentage, 1), "%)")
 
-# Create heatmap
+# Create heatmap we need
 heatmap_plot <- ggplot(cross_tab_df, aes(x = Seasonal, y = H1N1, fill = Percentage)) +
   geom_tile(color = "white", size = 0.5) +
   geom_text(aes(label = Label), color = "white", fontface = "bold", size = 4) +
@@ -120,97 +156,227 @@ heatmap_plot <- ggplot(cross_tab_df, aes(x = Seasonal, y = H1N1, fill = Percenta
   ) +
   coord_fixed()
 
-print(heatmap_plot)
+heatmap_plot
+
+
+# 
+# #The Phi coefficient (ϕ) is a statistical measure used to determine the association between two binary variables — variables that only take on two possible values.
+# Using the Phi coefficient between h1n1_vaccine and seasonal_vaccine helps us:
+#   
+#   Understand the relationship between the two targets.
+# 
+# Choose better modeling strategies.
+# 
+# Interpret results more effectively.
+# 
+# So 0.377 is not weak, but also not very strong — it's in the middle, meaning:
+# 
+# There's a meaningful pattern.
+# 
+# But there’s still plenty of variation — many people may have taken only one vaccine or neither.
 
 #------------------------------
 # 3. Joining Features and Labels
 #------------------------------
+#Just checking the df
 
-# Join the datasets - using a safer method with explicit message about success
+# Join the datasets 
 joined_df <- features_df %>%
   inner_join(labels_df, by = "respondent_id")
 
+joined_df <- features_df %>%
+  inner_join(labels_df, by = "respondent_id") %>%
+  mutate(
+    # 1a) “Real” multi-level factors
+    age_group = factor(
+      age_group,
+      levels = c(
+        "18 - 34 Years",
+        "35 - 44 Years",
+        "45 - 54 Years",
+        "55 - 64 Years",
+        "65+ Years"
+      ),
+      ordered = TRUE
+    ),
+    education = factor(
+      education,
+      levels = c("< 12 Years", "12 Years", "Some College", "College Graduate", ""),
+      ordered = TRUE
+    ),
+    income_poverty = factor(
+      income_poverty,
+      levels = c("Below Poverty", "<= $75,000, Above Poverty", "> $75,000", ""),
+      ordered = TRUE
+    ),
+    
+    # 1b) All your 1→5 “opinion_*” items
+    across(
+      starts_with("opinion_"),
+      ~ factor(.x, levels = 1:5, ordered = TRUE)
+    ),
+    
+    # 1c) The two concern/knowledge items (0→5)
+    h1n1_concern   = factor(h1n1_concern,   levels = 0:5, ordered = TRUE),
+    h1n1_knowledge = factor(h1n1_knowledge, levels = 0:5, ordered = TRUE),
+    
+    # 1d) All true binaries (0→1)
+    across(
+      c(
+        behavioral_outside_home, behavioral_touch_face,
+        behavioral_antiviral_meds, behavioral_avoidance,
+        behavioral_face_mask,     behavioral_wash_hands,
+        behavioral_large_gatherings,
+        doctor_recc_h1n1, doctor_recc_seasonal,
+        chronic_med_condition, child_under_6_months,
+        health_worker, health_insurance
+      ),
+      ~ factor(.x, levels = 0:1)
+    ),
+    
+    # 1e) Household counts as small-integer ordinals
+    household_adults   = factor(household_adults,
+                                levels = sort(na.omit(unique(household_adults))),
+                                ordered = TRUE),
+    household_children = factor(household_children,
+                                levels = sort(na.omit(unique(household_children))),
+                                ordered = TRUE)
+  )
+
+#Some info of the df
 # Display information about the join
 cat(paste("Dataset dimensions after join:", paste(dim(joined_df), collapse = " x ")), "\n")
 cat(paste("Original features dataset:", paste(dim(features_df), collapse = " x ")), "\n")
 cat(paste("Original labels dataset:", paste(dim(labels_df), collapse = " x ")), "\n")
 
-# Check if any rows were lost in the join
+# A check to see if any rows were lost in the join
 if(nrow(joined_df) != nrow(features_df) || nrow(joined_df) != nrow(labels_df)) {
   cat("WARNING: Some rows were lost during the join operation. This could affect analysis.\n")
 } else {
   cat("Join completed successfully with no data loss.\n")
 }
+#Nice
 
 #------------------------------
 # 4. Improved Vaccination Rate Function
 #------------------------------
 vaccination_rate_plot <- function(col, target, data, title = NULL, thresh = 10) {
+  # Filter out NA + empty values
   data <- data %>%
-    filter(!is.na(.data[[col]]) & !is.na(.data[[target]]))
+    filter(
+      !is.na(.data[[col]]),
+      !is.na(.data[[target]])
+    )
   
-  # count distinct values
+  # For factor/character columns, also filter out empty strings
+  if (is.factor(data[[col]]) || is.character(data[[col]])) {
+    data <- data %>% filter(as.character(.data[[col]]) != "")
+  }
+  
+  # Count distinct values actually present in the data
   n_vals <- n_distinct(data[[col]])
   
-  # decide bar-chart vs boxplot
+  # Get the actual values present in the data
+  actual_values <- sort(unique(data[[col]]))
+  
+  # Discrete if factor/char or small integer
   if (is.factor(data[[col]]) ||
       is.character(data[[col]]) ||
-      (is.integer(data[[col]]) && n_vals <= thresh)) {
+      (is.numeric(data[[col]]) && n_vals <= thresh)) {
     
-    counts <- data %>%
-      count(!!sym(col), !!sym(target)) %>%
-      group_by(!!sym(col)) %>%
-      mutate(
-        total        = sum(n),
-        percentage   = 100 * n / total,
-        target_label = factor(!!sym(target),
-                              levels = c(0,1),
-                              labels = c("Not Vaccinated","Vaccinated"))
-      ) %>%
-      ungroup()
+    # For ordered factors like h1n1_concern and h1n1_knowledge,
+    # we need to make sure we preserve the actual levels present in the data
+    if (is.factor(data[[col]]) && is.ordered(data[[col]])) {
+      # Get the actual levels present in the data
+      present_levels <- levels(data[[col]])[levels(data[[col]]) %in% actual_values]
+      
+      # Create cross-tabulation of counts
+      counts <- data %>%
+        count(!!sym(col), !!sym(target)) %>%
+        # No complete() here as we only want actual present levels
+        group_by(!!sym(col)) %>%
+        mutate(
+          total = sum(n),
+          percentage = 100 * n / total,
+          target_label = factor(
+            !!sym(target),
+            levels = c(0, 1),
+            labels = c("Not Vaccinated", "Vaccinated")
+          )
+        ) %>%
+        ungroup()
+    } else {
+      # For non-ordered factors or other variables
+      counts <- data %>%
+        count(!!sym(col), !!sym(target)) %>%
+        group_by(!!sym(col)) %>%
+        mutate(
+          total = sum(n),
+          percentage = 100 * n / total,
+          target_label = factor(
+            !!sym(target),
+            levels = c(0, 1),
+            labels = c("Not Vaccinated", "Vaccinated")
+          )
+        ) %>%
+        ungroup()
+      
+      # For unordered factors, sort by vaccination rate
+      if (!is.ordered(data[[col]])) {
+        lvl <- counts %>%
+          filter(!!sym(target) == 1) %>%
+          arrange(desc(percentage)) %>%
+          pull(!!sym(col))
+        
+        counts[[col]] <- factor(counts[[col]], levels = lvl)
+      }
+    }
     
-    # order levels by vaccination rate
-    lvl <- counts %>%
-      filter(!!sym(target) == 1) %>%
-      arrange(desc(percentage)) %>%
-      pull(!!sym(col))
-    counts[[col]] <- factor(counts[[col]], levels = lvl)
-    
-    ggplot(counts, aes(x = !!sym(col), y = percentage, fill = target_label)) +
+    ggplot(counts, aes(
+      y = !!sym(col),       # category on y
+      x = percentage,       # percent on x
+      fill = target_label
+    )) +
       geom_col(width = 0.7) +
       geom_text(
         data = filter(counts, !!sym(target) == 1),
-        aes(label = paste0(round(percentage,1), "%")),
+        aes(label = paste0(round(percentage, 1), "%")),
         position = position_stack(vjust = 0.5),
-        color    = "white",
+        color = "white",
         fontface = "bold",
-        size     = 3
+        size = 3
       ) +
       scale_fill_manual(values = vaccine_colors) +
-      coord_flip() +
+      # Only show levels that exist in the data
+      scale_y_discrete(drop = TRUE) +
       labs(
-        x     = NULL,
-        y     = "Percentage (%)",
-        fill  = "Vaccination Status",
-        title = title %||% paste("Vaccination Rate by", gsub("_"," ",col))
+        x = "Percentage (%)",
+        y = NULL,
+        fill = "Vaccination Status",
+        title = title %||% paste("Vaccination Rate by", gsub("_", " ", col))
       )
     
   } else {
-    # continuous → boxplot
+    # Continuous → boxplot branch
     ggplot(data, aes(
-      x    = factor(!!sym(target), levels=c(0,1),
-                    labels=c("Not Vaccinated","Vaccinated")),
-      y    = !!sym(col),
-      fill = factor(!!sym(target), levels=c(0,1))
+      x = factor(!!sym(target), levels = c(0, 1),
+                 labels = c("Not Vaccinated", "Vaccinated")),
+      y = !!sym(col),
+      fill = factor(!!sym(target), levels = c(0, 1))
     )) +
-      geom_boxplot(alpha = 0.8, outlier.color = "#555555", outlier.alpha = 0.5) +
+      geom_boxplot(
+        alpha = 0.8,
+        outlier.color = "#555555",
+        outlier.alpha = 0.5
+      ) +
       scale_fill_manual(values = vaccine_colors) +
       labs(
-        x     = NULL,
-        y     = gsub("_"," ",col),
-        fill  = "Vaccination Status",
-        title = title %||% paste("Distribution of", gsub("_"," ",col),
-                                 "by Vaccination Status")
+        x = NULL,
+        y = gsub("_", " ", col),
+        fill = "Vaccination Status",
+        title = title %||% paste(
+          "Distribution of", gsub("_", " ", col), "by Vaccination Status"
+        )
       ) +
       theme(legend.position = "none")
   }
@@ -220,6 +386,7 @@ vaccination_rate_plot <- function(col, target, data, title = NULL, thresh = 10) 
 h1n1_plots     <- list()
 seasonal_plots <- list()
 
+#Better naming of varibale here
 for (col in cols_to_plot) {
   pretty <- tools::toTitleCase(gsub("_"," ",col))
   t1 <- paste("H1N1 Vaccination Rate by", pretty)
@@ -229,17 +396,20 @@ for (col in cols_to_plot) {
   seasonal_plots[[col]] <- vaccination_rate_plot(col, "seasonal_vaccine", joined_df, t2)
 }
 
-# example layout
-example_plots <- (h1n1_plots$h1n1_concern + h1n1_plots$h1n1_knowledge) /
-  (h1n1_plots$opinion_h1n1_vacc_effective + h1n1_plots$age_group) +
+# Here you can just pick a feature you are interested in looking
+#since h1n1_plots is list
+#up to you man
+h1n1_list_plots <- (h1n1_plots$h1n1_concern + h1n1_plots$h1n1_knowledge ) /
+  (h1n1_plots$opinion_h1n1_vacc_effective + h1n1_plots$age_group ) +
   plot_layout(guides = "collect") +
   plot_annotation(
     title = "Key Factors Influencing H1N1 Vaccination",
     theme = theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5))
   )
-print(example_plots)
 
-seasonal_example_plots <- (seasonal_plots$opinion_seas_vacc_effective +
+h1n1_list_plots
+
+seasonal_list_plots <- (seasonal_plots$h1n1_concern +
                              seasonal_plots$opinion_seas_risk) /
   (seasonal_plots$age_group + seasonal_plots$education) +
   plot_layout(guides = "collect") +
@@ -247,7 +417,7 @@ seasonal_example_plots <- (seasonal_plots$opinion_seas_vacc_effective +
     title = "Key Factors Influencing Seasonal Flu Vaccination",
     theme = theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5))
   )
-print(seasonal_example_plots)
+seasonal_list_plots
 #------------------------------
 # 6. Advanced Analysis - Correlation Matrix
 #------------------------------
@@ -281,7 +451,7 @@ correlation_plot <- ggplot(cor_df, aes(x = Feature1, y = Feature2, fill = Correl
   ) +
   coord_fixed()
 
-print(correlation_plot)
+correlation_plot
 
 #------------------------------
 # 7. Data Leakage Assessment
