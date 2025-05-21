@@ -66,13 +66,45 @@ mcar_test(data_train)
 # Parameter:
 # x: the data, where the mode should be determined
 
-mode <- function(x, na.rm = FALSE) {
+mode <- function(x, na.rm = TRUE) {
   if(na.rm){
     x = x[!is.na(x)]
   }
 
   ux <- unique(x)
   return(ux[which.max(tabulate(match(x, ux)))])
+}
+
+# Apply mode function to all character columns in a data frame
+modes_df <- function(df, na.rm = TRUE) {
+  char_cols <- df[sapply(df, is.character)]
+  modes <- sapply(char_cols, mode, na.rm = na.rm)
+  return(modes)
+}
+
+# Create an imputation function that uses stored medians and modes
+# Function that imputes missing data using median and modes
+# Parameters:
+# df: dataframe where missing data should be imputed
+# medians: medians used to impute numeric variables
+# modes: modes used to impute character variables
+
+impute_with_training_stats <- function(df, medians, modes) {
+  
+  # Loop over each column in the data frame
+  for (col in names(df)) {
+    # If column is numeric
+    if (col %in% names(medians) && is.numeric(df[[col]])) {
+      # Replace NA values in the column with the stored median
+      df[[col]][is.na(df[[col]])] <- medians[[col]]
+    }
+    # If column is character
+    if (col %in% names(modes) && (is.character(df[[col]]))) {
+      # Replace NA values in the column with the stored mode
+      df[[col]][is.na(df[[col]])] <- modes[[col]]
+    }
+  }
+  return(df)
 }
 
 ```
