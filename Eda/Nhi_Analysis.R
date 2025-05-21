@@ -34,7 +34,7 @@ categorical_outliers <- function(df, cat_threshold = 0.01) {
 }
 
 
-# Function that detects "numeriical" outliers based on an IQR multiplier.
+# Function that detects "numerical" outliers based on an IQR multiplier.
 # Parameters:
 # df: data frame that should be analysed
 # iqr_multiplier: the factor used to identify an outlier
@@ -79,7 +79,7 @@ numeric_outliers(df = data_train, iqr_multiplier = 1.5)
 # h1n1_knowledge × behavioral_antiviral_meds
 # ->  People concerned or knowledgeable about H1N1 might be more likely to adopt 
 # protective behaviors
-
+#
 # Medical Advice × Trust
 # doctor_recc_h1n1 × opinion_h1n1_vacc_effective
 # doctor_recc_seasonal × opinion_seas_vacc_effective
@@ -105,3 +105,97 @@ numeric_outliers(df = data_train, iqr_multiplier = 1.5)
 # opinion_h1n1_vacc_effective × opinion_h1n1_sick_from_vacc
 # People who think the vaccine is effective but fear side effects might be 
 # conflicted affecting uptake.
+
+
+# STEP 4: Create a Baseline Model
+
+# Load in required packages
+library(caret)
+library(glmnet)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Create 5-fold cross-validation for h1n1_vaccine 
+folds <- createFolds(data_train$h1n1_vaccine,
+                     k = 5, 
+                     list = TRUE, 
+                     returnTrain = TRUE)
+
+results <- list()
+
+for (i in 1:5) {
+  
+  train_idx <- folds[[i]]
+  train_data <- data_train[train_idx, ]
+  val_data <- data_train[-train_idx, ]
+  
+  # Impute missing data in training data
+  imputed_train <- train_data %>%
+    mutate(across(where(is.character), ~ replace_na(.x, mode(., na.rm = TRUE))),
+           across(where(is.numeric), ~ replace_na(.x, median(., na.rm = TRUE))))
+  
+  # Store median/mode from training for validation set later
+  train_medians <- sapply(train_data, 
+                          function(x) if (is.numeric(x)) median(x, na.rm = TRUE) else NA)
+  train_modes   <- sapply(train_data, 
+                          function(x) if (is.character(x)) mode(x, na.rm = TRUE) else NA)
+  
+  # Change data types to factor
+  imputed_train <- imputed_train %>%
+    mutate(across(2:last_col(), factor))
+  
+  # Create Interaction Terms using domain knowledge via formula
+  formula <- h1n1_vaccine ~ . +
+    h1n1_concern:behavioral_avoidance +
+    h1n1_concern:behavioral_face_mask +
+    h1n1_knowledge:behavioral_antiviral_meds +
+    doctor_recc_h1n1:opinion_h1n1_vacc_effective +
+    doctor_recc_seasonal:opinion_seas_vacc_effective +
+    health_worker:opinion_h1n1_risk +
+    health_worker:opinion_seas_risk +
+    income_poverty:health_insurance +
+    education:health_insurance +
+    child_under_6_months:chronic_med_condition +
+    child_under_6_months:behavioral_touch_face +
+    opinion_h1n1_vacc_effective:opinion_h1n1_sick_from_vacc
+  
+  # Prepare Design Matrix for glmnet
+  x_train <- model.matrix(formula, data = imputed_train)[, -1]
+  y_train <- imputed_train$h1n1_vaccine
+  
+  # LASSO with CV to choose best lambda
+  cv_fit <- cv.glmnet(x_train, y_train, alpha = 1, family = "binomial")
+  
+  best_lambda <- cv_fit$lambda.min
+  lasso_model <- glmnet(x_train, y_train, alpha = 1, lambda = best_lambda, family = "binomial")
+  
+  # Apply same interaction to validation data and use median and mode from training set to impute
+  # Avoid data leakage (models don't handle NAs)
+  
+  imputed_val <- val_data
+  for (col in names(imputed_val)) {
+    if (is.numeric(imputed_val[[col]])) {
+      imputed_val[[col]][is.na(imputed_val[[col]])] <- train_medians[[col]]
+    } else if (is.character(imputed_val[[col]]) || is.factor(imputed_val[[col]])) {
+      imputed_val[[col]][is.na(imputed_val[[col]])] <- train_modes[[col]]
+    }
+  }
+  
+  # Change datatype
+  imputed_val <- imputed_val %>%
+    mutate(across(2:last_col(), factor))
+  
+  x_val <- model.matrix(formula, data = imputed_val)[, -1]
+  y_val <- imputed_val$h1n1_vaccine
+  
+  # Predict and Store Results (Note: we want probabilities later)
+  pred_prob <- predict(lasso_model, newx = x_val, type = "response")
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  
+  accuracy <- mean(pred_class == y_val)
+  results[[i]] <- list(model = lasso_model, accuracy = accuracy, lambda = best_lambda)
+}
+
+# Summary of CV Accuracies
+mean(sapply(results, function(x) x$accuracy))
