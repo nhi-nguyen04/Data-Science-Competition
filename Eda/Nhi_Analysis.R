@@ -135,11 +135,9 @@ for (i in 1:5) {
     mutate(across(where(is.character), ~ replace_na(.x, mode(., na.rm = TRUE))),
            across(where(is.numeric), ~ replace_na(.x, median(., na.rm = TRUE))))
   
-  # Store median/mode from training for validation set later
-  train_medians <- sapply(train_data, 
-                          function(x) if (is.numeric(x)) median(x, na.rm = TRUE) else NA)
-  train_modes   <- sapply(train_data, 
-                          function(x) if (is.character(x)) mode(x, na.rm = TRUE) else NA)
+  # Store training medians and modes for test imputation
+  train_medians <- sapply(train_data[sapply(train_data, is.numeric)], median, na.rm = TRUE)
+  train_modes   <- modes_df(train_data)
   
   # Change data types to factor
   imputed_train <- imputed_train %>%
@@ -173,14 +171,9 @@ for (i in 1:5) {
   # Apply same interaction to validation data and use median and mode from training set to impute
   # Avoid data leakage (models don't handle NAs)
   
-  imputed_val <- val_data
-  for (col in names(imputed_val)) {
-    if (is.numeric(imputed_val[[col]])) {
-      imputed_val[[col]][is.na(imputed_val[[col]])] <- train_medians[[col]]
-    } else if (is.character(imputed_val[[col]]) || is.factor(imputed_val[[col]])) {
-      imputed_val[[col]][is.na(imputed_val[[col]])] <- train_modes[[col]]
-    }
-  }
+  imputed_val <- impute_with_training_stats(df = val_data, 
+                                            medians = train_medians, 
+                                            modes = train_modes)
   
   # Change datatype
   imputed_val <- imputed_val %>%
