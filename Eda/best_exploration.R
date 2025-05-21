@@ -7,6 +7,9 @@ library(patchwork)
 library(scales)
 library(viridis)
 library(grid)   
+library(tableone)
+library(knitr)
+library(tidyverse) 
 
 # theme set up for now
 # probably going to change in the future
@@ -514,25 +517,14 @@ cat("\n5. Cross-validation will be implemented in model training to further prot
 
 
 
-# -----------------------------------------------------
-# 1. DATA LOADING AND INITIAL INSPECTION
-# -----------------------------------------------------
-cat("\n## 1. DATA LOADING AND INITIAL INSPECTION\n\n")
 
-# Load datasets
-cat("Loading datasets...\n")
+
+
 data_train <- read_csv("Data/training_set_features.csv")
 data_train_labels <- read_csv("Data/training_set_labels.csv")
-data_test <- read_csv("Data/test_set_features.csv")
 
 # Merge training features and labels
 df <- left_join(data_train, data_train_labels, by = "respondent_id")
-cat("Training data dimensions:", dim(df)[1], "rows and", dim(df)[2], "columns\n")
-cat("Test data dimensions:", dim(data_test)[1], "rows and", dim(data_test)[2], "columns\n\n")
-
-# Quick overview of the dataset structure
-cat("Overview of dataset structure:\n")
-glimpse(df)
 
 # Identify data types for proper categorization
 df_types <- data.frame(
@@ -572,73 +564,6 @@ df_updated <- df %>%
   mutate(across(all_of(categorical_features), as.factor),
          across(all_of(binary_features), as.factor))
 
-cat("\nAfter proper classification of variables:\n")
-glimpse(df_updated)
-
-# -----------------------------------------------------
-# 2. TARGET VARIABLE ANALYSIS
-# -----------------------------------------------------
-cat("\n## 2. TARGET VARIABLE ANALYSIS\n\n")
-
-# Count occurrences of each target variable combination (H1N1 and seasonal vaccines)
-target_counts <- df_updated %>%
-  count(h1n1_vaccine, seasonal_vaccine) %>%
-  mutate(
-    percentage = n / sum(n) * 100,
-    label = paste0(round(percentage, 1), "%")
-  )
-
-cat("Distribution of target variable combinations:\n")
-print_table(target_counts)
-
-# Create a more insightful visualization of the target variables
-target_plot <- ggplot(target_counts, aes(x = h1n1_vaccine, y = seasonal_vaccine, fill = n)) +
-  geom_tile() +
-  geom_text(aes(label = label), color = "white", fontface = "bold") +
-  scale_fill_viridis_c(option = "D") +
-  labs(
-    title = "Distribution of Vaccination Combinations",
-    subtitle = "Percentage of respondents by H1N1 and seasonal flu vaccination status",
-    x = "H1N1 Vaccine (1 = Yes, 0 = No)",
-    y = "Seasonal Vaccine (1 = Yes, 0 = No)",
-    fill = "Count"
-  ) +
-  theme(legend.position = "right")
-
-print(target_plot)
-#save_plot(target_plot, "01_target_distribution")
-#####----------------------------------------------------######----------------------------------------------------######
-# Individual vaccination rates
-h1n1_rate <- sum(df_updated$h1n1_vaccine == 1, na.rm = TRUE) / nrow(df_updated) * 100
-seasonal_rate <- sum(df_updated$seasonal_vaccine == 1, na.rm = TRUE) / nrow(df_updated) * 100
-
-cat("\nOverall vaccination rates:\n")
-cat("- H1N1 vaccination rate: ", round(h1n1_rate, 2), "%\n")
-cat("- Seasonal flu vaccination rate: ", round(seasonal_rate, 2), "%\n\n")
-
-# Create bar chart showing individual vaccination rates
-vaccination_summary <- data.frame(
-  vaccine_type = c("H1N1", "Seasonal Flu"),
-  percentage = c(h1n1_rate, seasonal_rate)
-)
-
-vax_plot <- ggplot(vaccination_summary, aes(x = vaccine_type, y = percentage, fill = vaccine_type)) +
-  geom_bar(stat = "identity", width = 0.5) +
-  geom_text(aes(label = paste0(round(percentage, 1), "%")), vjust = -0.5, size = 4) +
-  scale_fill_manual(values = cb_palette[c(2, 6)]) +
-  labs(
-    title = "Vaccination Rates by Type",
-    subtitle = "Percentage of respondents who received each vaccine",
-    x = "Vaccine Type",
-    y = "Percentage (%)",
-    fill = "Vaccine Type"
-  ) +
-  ylim(0, max(vaccination_summary$percentage) * 1.2) +
-  theme(legend.position = "none")
-
-print(vax_plot)
-#save_plot(vax_plot, "02_vaccination_rates", width = 8, height = 6)
-#####----------------------------------------------------######----------------------------------------------------######
 
 # -----------------------------------------------------
 # 3. MISSING VALUES ANALYSIS
