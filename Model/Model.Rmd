@@ -10,29 +10,3 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-# Nhi Nguyen
-```{r Load in Packages, message=FALSE, warning=FALSE}
-
-library(pROC)
-
-```
-
-
-```{r Create a Baseline Model without respondent_ID}
-
-# Exclude respondent_id and other target variables from predictors as it has a moderate positive correlation
-# Model for h1n1_vaccine
-model_h1n1 <- glm(h1n1_vaccine ~ . - respondent_id - seasonal_vaccine,
-                  data = data_train,
-                  family = binomial)
-
-# Model for seasonal_vaccine
-model_seasonal <- glm(seasonal_vaccine ~ . - respondent_id - h1n1_vaccine,
-                      data = data_train,
-                      family = binomial)
-
-# summary(model_h1n1)
-# summary(model_seasonal)
-
-```
-
