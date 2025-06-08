@@ -1,8 +1,14 @@
+#This is a better version of random forest
+
+
 # -----------------------------------------------
 # 1. SET UP ENVIRONMENT
 # -----------------------------------------------
 library(tidyverse)
 library(tidymodels)
+library(baguette)
+library(tune)
+library(future)
 set.seed(6)
 # -----------------------------------------------
 # 2. LOAD DATA
@@ -16,8 +22,8 @@ test_df        <- read_csv("Data/test_set_features.csv")
 # -----------------------------------------------
 train_df <- train_df %>%
   mutate(
-    h1n1_vaccine     = factor(h1n1_vaccine, levels = c(0, 1)),
-    seasonal_vaccine = factor(seasonal_vaccine, levels = c(0, 1))
+    h1n1_vaccine     = factor(h1n1_vaccine, levels = c(1, 0)),
+    seasonal_vaccine = factor(seasonal_vaccine, levels = c(1, 0))
   )
 
 # 3 IDENTIFY NUMERIC VS. CATEGORICAL BY TYPE
@@ -48,10 +54,9 @@ eval_data_seas  <- testing(data_split_seas)
 # -----------------------------------------------
 # 5. SPECIFY BASE MODEL (RPART TREE)
 # -----------------------------------------------
-model <- decision_tree(
-) %>%
-  set_engine("rpart") %>%
-  set_mode("classification")
+model <- rand_forest() %>%
+  set_mode("classification") %>%
+  set_engine("ranger", importance = "impurity")
 
 
 # -----------------------------------------------
@@ -69,6 +74,8 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   step_unknown(all_nominal_predictors()) %>%
   # One‐hot encode all factors
   step_dummy(all_nominal_predictors()) %>%
+  # <- drops any predictors that have zero variance
+  step_zv(all_predictors()) %>% 
   # Normalize numeric columns
   step_normalize(all_numeric_predictors())
 
@@ -81,7 +88,10 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   step_impute_median(all_numeric_predictors()) %>%
   step_unknown(all_nominal_predictors()) %>%
   step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_predictors()) %>% 
   step_normalize(all_numeric_predictors())
+
+tidy(seas_recipe, number = 6)
 
 # -----------------------------------------------
 #7.WORKFLOWS
@@ -107,7 +117,7 @@ h1n1_dt_wkfl_fit <- wf_h1n1 %>%
 seas_dt_wkfl_fit <- wf_seas %>% 
   last_fit(split = data_split_seas)
 
-
+#vip::vip(model)
 # -----------------------------------------------
 #9.Calculate performance metrics on test data
 # -----------------------------------------------
@@ -118,6 +128,21 @@ h1n1_dt_wkfl_fit %>%
 seas_dt_wkfl_fit %>% 
   collect_metrics()
 
+# 1. Pull out predictions (with class‐probabilities)
+h1n1_preds <- collect_predictions(h1n1_dt_wkfl_fit)
+seas_preds <- collect_predictions(seas_dt_wkfl_fit)
+
+# 2. Compute ROC curve data
+roc_h1n1 <- roc_curve(h1n1_preds, truth = h1n1_vaccine, .pred_1)
+roc_seas <- roc_curve(seas_preds, truth = seasonal_vaccine, .pred_1)
+
+# 3a. Plot separately
+autoplot(roc_h1n1) + 
+  ggtitle("H1N1 Vaccine ROC Curve")
+
+autoplot(roc_seas) + 
+  ggtitle("Seasonal Vaccine ROC Curve")
+
 
 # -----------------------------------------------
 #10.Cross Validation
@@ -125,15 +150,18 @@ seas_dt_wkfl_fit %>%
 #Cross-validation gives you a more robust estimate of your out-of-sample performance without 
 #the statistical pitfalls - it assesses your model more profoundly.
 
+#For speed
+plan(multisession, workers = 4) 
+
 set.seed(290)
 h1n1_folds <- vfold_cv(train_data_h1n1, v = 10,
-                        strata = h1n1_vaccine)
+                       strata = h1n1_vaccine)
 
 h1n1_folds
 
 
 seasonal_folds <- vfold_cv(train_data_seas, v = 10,
-                       strata = seasonal_vaccine)
+                           strata = seasonal_vaccine)
 
 seasonal_folds
 
@@ -188,13 +216,15 @@ seasonal_dt_rs_results %>%
 #11.Hyperparameter tuning
 # -----------------------------------------------
 
-dt_tune_model <- decision_tree(cost_complexity = tune(),
-                               tree_depth = tune(),
-                               min_n = tune()) %>% 
-  # Specify engine
-  set_engine("rpart") %>% 
-  # Specify mode
-  set_mode("classification")
+dt_tune_model <-rand_forest(
+  mtry = tune(),
+  min_n = tune(),
+  trees = 500 # it is adviced that trees should be between 500-1000
+) %>%
+  set_engine("ranger", importance = "impurity") %>%
+  set_mode("classification") 
+
+
 
 dt_tune_model
 
@@ -215,24 +245,35 @@ seas_tune_wkfl
 
 
 
-# Hyperparameter tuning with grid search
-set.seed(214)
-dt_grid <- grid_random(parameters(dt_tune_model),
-                       size = 5)
+# Finalize parameter ranges for both
+h1n1_params  <- finalize(parameters(dt_tune_model), train_data_h1n1)
+seas_params  <- finalize(parameters(dt_tune_model), train_data_seas)
 
-dt_grid
+# Hyperparameter tuning with grid search
+
+#For speed
+plan(multisession, workers = 4) 
+
+
+set.seed(214)
+h1n1_grid <- grid_random(h1n1_params, size = 10)
+
+set.seed(215)
+seas_grid <- grid_random(seas_params, size = 10)
+
+
 
 
 # Hyperparameter tuning
 h1n1_dt_tuning <- h1n1_tune_wkfl %>% 
   tune_grid(resamples = h1n1_folds,
-            grid = dt_grid,
+            grid = h1n1_grid,
             metrics = data_metrics)
 
 
 seas_dt_tuning <- seas_tune_wkfl %>% 
   tune_grid(resamples = seasonal_folds,
-            grid = dt_grid,
+            grid = seas_grid,
             metrics = data_metrics)
 
 
@@ -317,8 +358,45 @@ final_seas_tune_wkfl <- seas_tune_wkfl %>%
 
 final_seas_tune_wkfl
 
+-----------------------------------------------
+  # 14. LAST_FIT ON THE HELD-OUT SPLITS
+  # -----------------------------------------------
+h1n1_final_fit <- 
+  final_h1n1_tune_wkfl %>% 
+  last_fit(split = data_split_h1n1)
+
+seas_final_fit <- 
+  final_seas_tune_wkfl %>% 
+  last_fit(split = data_split_seas)
+
+
+#-----------------------------------------------
+# 15. COLLECT METRICS
 # -----------------------------------------------
-# 14. TRAIN FINAL MODELS ON FULL TRAINING DATA
+
+h1n1_final_fit %>% collect_metrics()
+seas_final_fit  %>% collect_metrics()
+
+
+# -----------------------------------------------
+# 16. ROC CURVE VISUALIZATION (via last_fit results)
+# -----------------------------------------------
+#library(yardstick)
+#library(ggplot2)
+
+# 1) Pull out predictions (with probabilities)
+h1n1_preds <- h1n1_final_fit %>% collect_predictions()
+seas_preds <- seas_final_fit  %>% collect_predictions()
+
+# 2) Compute ROC curve data
+roc_h1n1 <- roc_curve(h1n1_preds, truth = h1n1_vaccine, .pred_1)
+roc_seas <- roc_curve(seas_preds, truth = seasonal_vaccine, .pred_1)
+
+# 3a) Plot separately
+autoplot(roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve")
+autoplot(roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve")
+# -----------------------------------------------
+# 17. TRAIN FINAL MODELS ON FULL TRAINING DATA
 # -----------------------------------------------
 
 
@@ -326,14 +404,17 @@ final_h1n1 <- fit(final_h1n1_tune_wkfl, train_df)
 final_seas <- fit(final_seas_tune_wkfl, train_df)
 
 
+
+
+
 # -----------------------------------------------
-# 15. MAKE PREDICTIONS ON TEST DATA
+# 18. MAKE PREDICTIONS ON TEST DATA
 # -----------------------------------------------
 # Add missing columns to test data to match training structure
 test_df_prepared <- test_df %>%
   mutate(
-    h1n1_vaccine = factor(NA, levels = c(0, 1)),
-    seasonal_vaccine = factor(NA, levels = c(0, 1)),
+    h1n1_vaccine = factor(NA, levels = c(1, 0)),
+    seasonal_vaccine = factor(NA, levels = c(1, 0)),
     strata = NA_character_
   )
 
@@ -345,7 +426,7 @@ head(test_pred_seas)
 
 
 # -----------------------------------------------
-# 16. CREATE SUBMISSION FILE
+# 19. CREATE SUBMISSION FILE
 # -----------------------------------------------
 submission <- tibble(
   respondent_id = test_df$respondent_id,
@@ -354,6 +435,6 @@ submission <- tibble(
 )
 
 # -----------------------------------------------
-# 17. SAVE SUBMISSION
+# 20. SAVE SUBMISSION
 # -----------------------------------------------
-write_csv(submission, "finalized_dt_workflow.csv")
+write_csv(submission, "random_forest_workflow-2.csv")

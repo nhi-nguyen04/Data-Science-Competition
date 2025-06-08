@@ -10,6 +10,7 @@ library(grid)
 library(tableone)
 library(knitr)
 library(tidyverse) 
+library(naniar)
 
 # theme set up for now
 # probably going to change in the future
@@ -37,6 +38,15 @@ lapply(features_df, unique)
 
 #the labels don't have to be processed
 lapply(labels_df, unique)
+
+#missing 
+vis_miss(features_df,warn_large_data = FALSE)
+
+#Only columns with missing
+features_df %>%
+  select(where(~ any(is.na(.)))) %>%
+  vis_miss()
+
 
 
 # correct color mapping

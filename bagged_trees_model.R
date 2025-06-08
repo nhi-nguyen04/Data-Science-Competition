@@ -3,6 +3,7 @@
 # -----------------------------------------------
 library(tidyverse)
 library(tidymodels)
+library(baguette)
 set.seed(6)
 # -----------------------------------------------
 # 2. LOAD DATA
@@ -16,8 +17,8 @@ test_df        <- read_csv("Data/test_set_features.csv")
 # -----------------------------------------------
 train_df <- train_df %>%
   mutate(
-    h1n1_vaccine     = factor(h1n1_vaccine, levels = c(0, 1)),
-    seasonal_vaccine = factor(seasonal_vaccine, levels = c(0, 1))
+    h1n1_vaccine     = factor(h1n1_vaccine, levels = c(1, 0)),
+    seasonal_vaccine = factor(seasonal_vaccine, levels = c(1, 0))
   )
 
 # 3 IDENTIFY NUMERIC VS. CATEGORICAL BY TYPE
@@ -48,10 +49,9 @@ eval_data_seas  <- testing(data_split_seas)
 # -----------------------------------------------
 # 5. SPECIFY BASE MODEL (RPART TREE)
 # -----------------------------------------------
-model <- decision_tree(
-) %>%
-  set_engine("rpart") %>%
-  set_mode("classification")
+model <- bag_tree() %>%
+  set_engine("rpart", times = 20)%>%
+set_mode("classification") 
 
 
 # -----------------------------------------------
@@ -69,6 +69,8 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   step_unknown(all_nominal_predictors()) %>%
   # One‐hot encode all factors
   step_dummy(all_nominal_predictors()) %>%
+  # <- drops any predictors that have zero variance
+  step_zv(all_predictors()) %>% 
   # Normalize numeric columns
   step_normalize(all_numeric_predictors())
 
@@ -81,6 +83,7 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   step_impute_median(all_numeric_predictors()) %>%
   step_unknown(all_nominal_predictors()) %>%
   step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_predictors()) %>% 
   step_normalize(all_numeric_predictors())
 
 # -----------------------------------------------
@@ -127,13 +130,13 @@ seas_dt_wkfl_fit %>%
 
 set.seed(290)
 h1n1_folds <- vfold_cv(train_data_h1n1, v = 10,
-                        strata = h1n1_vaccine)
+                       strata = h1n1_vaccine)
 
 h1n1_folds
 
 
 seasonal_folds <- vfold_cv(train_data_seas, v = 10,
-                       strata = seasonal_vaccine)
+                           strata = seasonal_vaccine)
 
 seasonal_folds
 
@@ -188,13 +191,13 @@ seasonal_dt_rs_results %>%
 #11.Hyperparameter tuning
 # -----------------------------------------------
 
-dt_tune_model <- decision_tree(cost_complexity = tune(),
-                               tree_depth = tune(),
-                               min_n = tune()) %>% 
-  # Specify engine
-  set_engine("rpart") %>% 
-  # Specify mode
-  set_mode("classification")
+dt_tune_model <-bag_tree(cost_complexity = tune(),
+                         tree_depth = tune(),
+                         min_n = tune()) %>%
+  set_engine("rpart", times = 20)%>%
+  set_mode("classification") 
+  
+  
 
 dt_tune_model
 
@@ -356,4 +359,4 @@ submission <- tibble(
 # -----------------------------------------------
 # 17. SAVE SUBMISSION
 # -----------------------------------------------
-write_csv(submission, "finalized_dt_workflow.csv")
+write_csv(submission, "bagged_tree_workflow.csv")
