@@ -77,7 +77,7 @@ Going forward, both members will try to improve the model with the better score.
 
 
 
-Scores:
+## 🏆 Scores:
 
 - Base Model: 0.8283
 - Bagged Trees: 0.8324
