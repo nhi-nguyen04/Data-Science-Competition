@@ -1,13 +1,8 @@
-#This script its missing visuals
-
 # -----------------------------------------------
 # 1. SET UP ENVIRONMENT
 # -----------------------------------------------
 library(tidyverse)
 library(tidymodels)
-library(baguette)
-library(tune)
-library(future)
 set.seed(6)
 # -----------------------------------------------
 # 2. LOAD DATA
@@ -21,8 +16,8 @@ test_df        <- read_csv("Data/test_set_features.csv")
 # -----------------------------------------------
 train_df <- train_df %>%
   mutate(
-    h1n1_vaccine     = factor(h1n1_vaccine, levels = c(1, 0)),
-    seasonal_vaccine = factor(seasonal_vaccine, levels = c(1, 0))
+    h1n1_vaccine     = factor(h1n1_vaccine, levels = c(0, 1)),
+    seasonal_vaccine = factor(seasonal_vaccine, levels = c(0, 1))
   )
 
 # 3 IDENTIFY NUMERIC VS. CATEGORICAL BY TYPE
@@ -53,9 +48,10 @@ eval_data_seas  <- testing(data_split_seas)
 # -----------------------------------------------
 # 5. SPECIFY BASE MODEL (RPART TREE)
 # -----------------------------------------------
-model <- rand_forest() %>%
-  set_mode("classification") %>%
-  set_engine("ranger", importance = "impurity")
+model <- decision_tree(
+) %>%
+  set_engine("rpart") %>%
+  set_mode("classification")
 
 
 # -----------------------------------------------
@@ -90,8 +86,6 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   step_zv(all_predictors()) %>% 
   step_normalize(all_numeric_predictors())
 
-tidy(seas_recipe, number = 6)
-
 # -----------------------------------------------
 #7.WORKFLOWS
 # -----------------------------------------------
@@ -116,7 +110,7 @@ h1n1_dt_wkfl_fit <- wf_h1n1 %>%
 seas_dt_wkfl_fit <- wf_seas %>% 
   last_fit(split = data_split_seas)
 
-#vip::vip(model)
+
 # -----------------------------------------------
 #9.Calculate performance metrics on test data
 # -----------------------------------------------
@@ -127,21 +121,6 @@ h1n1_dt_wkfl_fit %>%
 seas_dt_wkfl_fit %>% 
   collect_metrics()
 
-# 1. Pull out predictions (with class‐probabilities)
-h1n1_preds <- collect_predictions(h1n1_dt_wkfl_fit)
-seas_preds <- collect_predictions(seas_dt_wkfl_fit)
-
-# 2. Compute ROC curve data
-roc_h1n1 <- roc_curve(h1n1_preds, truth = h1n1_vaccine, .pred_1)
-roc_seas <- roc_curve(seas_preds, truth = seasonal_vaccine, .pred_1)
-
-# 3a. Plot separately
-autoplot(roc_h1n1) + 
-  ggtitle("H1N1 Vaccine ROC Curve")
-
-autoplot(roc_seas) + 
-  ggtitle("Seasonal Vaccine ROC Curve")
-
 
 # -----------------------------------------------
 #10.Cross Validation
@@ -149,18 +128,15 @@ autoplot(roc_seas) +
 #Cross-validation gives you a more robust estimate of your out-of-sample performance without 
 #the statistical pitfalls - it assesses your model more profoundly.
 
-#For speed
-plan(multisession, workers = 4) 
-
 set.seed(290)
 h1n1_folds <- vfold_cv(train_data_h1n1, v = 10,
-                       strata = h1n1_vaccine)
+                        strata = h1n1_vaccine)
 
 h1n1_folds
 
 
 seasonal_folds <- vfold_cv(train_data_seas, v = 10,
-                           strata = seasonal_vaccine)
+                       strata = seasonal_vaccine)
 
 seasonal_folds
 
@@ -215,15 +191,13 @@ seasonal_dt_rs_results %>%
 #11.Hyperparameter tuning
 # -----------------------------------------------
 
-dt_tune_model <-rand_forest(
-  mtry = tune(),
-  min_n = tune(),
-  trees = 500 # it is adviced that trees should be between 500-1000
-) %>%
-  set_engine("ranger", importance = "impurity") %>%
-  set_mode("classification") 
-
-
+dt_tune_model <- decision_tree(cost_complexity = tune(),
+                               tree_depth = tune(),
+                               min_n = tune()) %>% 
+  # Specify engine
+  set_engine("rpart") %>% 
+  # Specify mode
+  set_mode("classification")
 
 dt_tune_model
 
@@ -244,35 +218,24 @@ seas_tune_wkfl
 
 
 
-# Finalize parameter ranges for both
-h1n1_params  <- finalize(parameters(dt_tune_model), train_data_h1n1)
-seas_params  <- finalize(parameters(dt_tune_model), train_data_seas)
-
 # Hyperparameter tuning with grid search
-
-#For speed
-plan(multisession, workers = 4) 
-
-
 set.seed(214)
-h1n1_grid <- grid_random(h1n1_params, size = 10)
+dt_grid <- grid_random(parameters(dt_tune_model),
+                       size = 5)
 
-set.seed(215)
-seas_grid <- grid_random(seas_params, size = 10)
-
-
+dt_grid
 
 
 # Hyperparameter tuning
 h1n1_dt_tuning <- h1n1_tune_wkfl %>% 
   tune_grid(resamples = h1n1_folds,
-            grid = h1n1_grid,
+            grid = dt_grid,
             metrics = data_metrics)
 
 
 seas_dt_tuning <- seas_tune_wkfl %>% 
   tune_grid(resamples = seasonal_folds,
-            grid = seas_grid,
+            grid = dt_grid,
             metrics = data_metrics)
 
 
@@ -366,37 +329,35 @@ final_h1n1 <- fit(final_h1n1_tune_wkfl, train_df)
 final_seas <- fit(final_seas_tune_wkfl, train_df)
 
 
-
-
-
 # -----------------------------------------------
 # 15. MAKE PREDICTIONS ON TEST DATA
 # -----------------------------------------------
 # Add missing columns to test data to match training structure
 test_df_prepared <- test_df %>%
   mutate(
-    h1n1_vaccine = factor(NA, levels = c(1, 0)),
-    seasonal_vaccine = factor(NA, levels = c(1, 0)),
+    h1n1_vaccine = factor(NA, levels = c(0, 1)),
+    seasonal_vaccine = factor(NA, levels = c(0, 1)),
     strata = NA_character_
   )
+skim(test_df_prepared)
 
-test_pred_h1n1 <- predict(final_h1n1, test_df_prepared, type = "prob") %>% pull(.pred_1)
-test_pred_seas <- predict(final_seas, test_df_prepared, type = "prob") %>% pull(.pred_1)
+test_pred_h1n1_decision_tree <- predict(final_h1n1, test_df_prepared, type = "prob") %>% pull(.pred_1)
+test_pred_seas_decision_tree <- predict(final_seas, test_df_prepared, type = "prob") %>% pull(.pred_1)
 
-head(test_pred_h1n1)
-head(test_pred_seas)
+head(test_pred_h1n1_decision_tree)
+head(test_pred_seas_decision_tree)
 
 
 # -----------------------------------------------
 # 16. CREATE SUBMISSION FILE
 # -----------------------------------------------
-submission <- tibble(
+submission_decision_tree <- tibble(
   respondent_id = test_df$respondent_id,
-  h1n1_vaccine = test_pred_h1n1,
-  seasonal_vaccine = test_pred_seas
+  h1n1_vaccine = test_pred_h1n1_decision_tree,
+  seasonal_vaccine = test_pred_seas_decision_tree
 )
 
 # -----------------------------------------------
 # 17. SAVE SUBMISSION
 # -----------------------------------------------
-write_csv(submission, "random_forest_workflow.csv")
+write_csv(submission_decision_tree, "finalized_dt_workflow.csv")

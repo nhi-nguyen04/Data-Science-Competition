@@ -1,6 +1,3 @@
-#This is a better version of random forest
-
-
 # -----------------------------------------------
 # 1. SET UP ENVIRONMENT
 # -----------------------------------------------
@@ -9,6 +6,9 @@ library(tidymodels)
 library(baguette)
 library(tune)
 library(future)
+library(vip) # for variable importance
+library(skimr) #Better Overview of the variables
+
 set.seed(6)
 # -----------------------------------------------
 # 2. LOAD DATA
@@ -25,6 +25,10 @@ train_df <- train_df %>%
     h1n1_vaccine     = factor(h1n1_vaccine, levels = c(1, 0)),
     seasonal_vaccine = factor(seasonal_vaccine, levels = c(1, 0))
   )
+
+
+#this gives us a break down of the variables in the dataset
+skim(train_df)
 
 # 3 IDENTIFY NUMERIC VS. CATEGORICAL BY TYPE
 # (Rather than manually listing variable names)
@@ -54,9 +58,12 @@ eval_data_seas  <- testing(data_split_seas)
 # -----------------------------------------------
 # 5. SPECIFY BASE MODEL (RPART TREE)
 # -----------------------------------------------
-model <- rand_forest() %>%
+model <- boost_tree() %>%
+  # Set the mode
   set_mode("classification") %>%
-  set_engine("ranger", importance = "impurity")
+  # Set the engine
+  set_engine("xgboost")
+
 
 
 # -----------------------------------------------
@@ -79,6 +86,7 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   # Normalize numeric columns
   step_normalize(all_numeric_predictors())
 
+#tidy(h1n1_recipe, number = 4)
 
 
 
@@ -91,7 +99,7 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   step_zv(all_predictors()) %>% 
   step_normalize(all_numeric_predictors())
 
-tidy(seas_recipe, number = 6)
+#tidy(seas_recipe, number = 4)
 
 # -----------------------------------------------
 #7.WORKFLOWS
@@ -117,7 +125,6 @@ h1n1_dt_wkfl_fit <- wf_h1n1 %>%
 seas_dt_wkfl_fit <- wf_seas %>% 
   last_fit(split = data_split_seas)
 
-#vip::vip(model)
 # -----------------------------------------------
 #9.Calculate performance metrics on test data
 # -----------------------------------------------
@@ -166,7 +173,14 @@ seasonal_folds <- vfold_cv(train_data_seas, v = 10,
 seasonal_folds
 
 # Create custom metrics function
-data_metrics <- metric_set(roc_auc, sens, spec)
+data_metrics <- metric_set(roc_auc, sens, spec,accuracy)
+
+
+# Some info from data camp course:
+# A very high in-sample AUC like can be an indicator of overfitting. 
+#It is also possible that your dataset is just very well structured, or your model might just be terrific!
+#   To check which of these is true, you need to produce out-of-sample estimates of your AUC, and because 
+#you don't want to touch your test set yet, you can produce these using cross-validation on your training set.
 
 
 # Fit resamples
@@ -181,6 +195,7 @@ seasonal_dt_rs <- wf_seas %>%
 
 # View performance metrics
 
+
 h1n1_dt_rs %>% 
   collect_metrics()
 
@@ -193,7 +208,7 @@ seasonal_dt_rs %>%
 h1n1_dt_rs_results <- h1n1_dt_rs %>% 
   collect_metrics(summarize = FALSE)
 
-# Explore model performance for decision tree
+# Explore model performance for xgboost
 h1n1_dt_rs_results %>% 
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
@@ -204,7 +219,7 @@ h1n1_dt_rs_results %>%
 seasonal_dt_rs_results <- seasonal_dt_rs %>% 
   collect_metrics(summarize = FALSE)
 
-# Explore model performance for decision tree
+# Explore model performance for xgboost
 seasonal_dt_rs_results %>% 
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
@@ -216,13 +231,16 @@ seasonal_dt_rs_results %>%
 #11.Hyperparameter tuning
 # -----------------------------------------------
 
-dt_tune_model <-rand_forest(
-  mtry = tune(),
-  min_n = tune(),
-  trees = 500 # it is adviced that trees should be between 500-1000
+dt_tune_model <-boost_tree(
+  learn_rate = tune(),
+  tree_depth = tune(),
+  trees = 500, # it is adviced that trees should be between 500-1000
+  sample_size = tune()
 ) %>%
-  set_engine("ranger", importance = "impurity") %>%
+  set_engine("xgboost", importance = "impurity") %>%
   set_mode("classification") 
+
+
 
 
 
@@ -404,6 +422,9 @@ final_h1n1 <- fit(final_h1n1_tune_wkfl, train_df)
 final_seas <- fit(final_seas_tune_wkfl, train_df)
 
 
+#Here I am checking for variable importance
+vip::vip(final_h1n1, num_features= 15)
+vip::vip(final_seas,  num_features= 15)
 
 
 
@@ -418,23 +439,23 @@ test_df_prepared <- test_df %>%
     strata = NA_character_
   )
 
-test_pred_h1n1 <- predict(final_h1n1, test_df_prepared, type = "prob") %>% pull(.pred_1)
-test_pred_seas <- predict(final_seas, test_df_prepared, type = "prob") %>% pull(.pred_1)
+test_pred_h1n1_xgboost <- predict(final_h1n1, test_df_prepared, type = "prob") %>% pull(.pred_1)
+test_pred_seas_xgboost <- predict(final_seas, test_df_prepared, type = "prob") %>% pull(.pred_1)
 
-head(test_pred_h1n1)
-head(test_pred_seas)
+head(test_pred_h1n1_xgboost)
+head(test_pred_seas_xgboost)
 
 
 # -----------------------------------------------
 # 19. CREATE SUBMISSION FILE
 # -----------------------------------------------
-submission <- tibble(
+submission_xgboost <- tibble(
   respondent_id = test_df$respondent_id,
-  h1n1_vaccine = test_pred_h1n1,
-  seasonal_vaccine = test_pred_seas
+  h1n1_vaccine = test_pred_h1n1_xgboost,
+  seasonal_vaccine = test_pred_seas_xgboost
 )
 
 # -----------------------------------------------
 # 20. SAVE SUBMISSION
 # -----------------------------------------------
-write_csv(submission, "random_forest_workflow-2.csv")
+write_csv(submission_xgboost, "xgboost-workflow.csv")

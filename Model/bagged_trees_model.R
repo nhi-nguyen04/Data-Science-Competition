@@ -340,23 +340,23 @@ test_df_prepared <- test_df %>%
     strata = NA_character_
   )
 
-test_pred_h1n1 <- predict(final_h1n1, test_df_prepared, type = "prob") %>% pull(.pred_1)
-test_pred_seas <- predict(final_seas, test_df_prepared, type = "prob") %>% pull(.pred_1)
+test_pred_h1n1_bagged_tree <- predict(final_h1n1, test_df_prepared, type = "prob") %>% pull(.pred_1)
+test_pred_seas_bagged_tree <- predict(final_seas, test_df_prepared, type = "prob") %>% pull(.pred_1)
 
-head(test_pred_h1n1)
-head(test_pred_seas)
+head(test_pred_h1n1_bagged_tree)
+head(test_pred_seas_bagged_tree)
 
 
 # -----------------------------------------------
 # 16. CREATE SUBMISSION FILE
 # -----------------------------------------------
-submission <- tibble(
+submission_bagged_tree <- tibble(
   respondent_id = test_df$respondent_id,
-  h1n1_vaccine = test_pred_h1n1,
-  seasonal_vaccine = test_pred_seas
+  h1n1_vaccine = test_pred_h1n1_bagged_tree,
+  seasonal_vaccine = test_pred_seas_bagged_tree
 )
 
 # -----------------------------------------------
 # 17. SAVE SUBMISSION
 # -----------------------------------------------
-write_csv(submission, "bagged_tree_workflow.csv")
+write_csv(submission_bagged_tree, "bagged_tree_workflow.csv")

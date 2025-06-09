@@ -71,22 +71,31 @@ h1n1_recipe <- recipe(
   data = train_data
 ) %>%
   update_role(respondent_id, new_role = "ID") %>%
-  step_rm(seasonal_vaccine, strata) %>%
-  step_impute_median(all_of(numeric_cols)) %>%
-  step_unknown(all_of(categorical_cols)) %>%
-  step_dummy(all_of(categorical_cols)) %>%
-  step_normalize(all_of(numeric_cols))
+  # Remove the other target (seasonal) if it’s present
+  #creates a specification of a recipe step that will remove selected variables.
+  step_rm(seasonal_vaccine) %>%
+  # Impute all numeric predictors by median:
+  step_impute_median(all_numeric_predictors()) %>%
+  # Create an "unknown" level for any missing factor
+  step_unknown(all_nominal_predictors()) %>%
+  # One‐hot encode all factors
+  step_dummy(all_nominal_predictors()) %>%
+  # <- drops any predictors that have zero variance
+  step_zv(all_predictors()) %>% 
+  # Normalize numeric columns
+  step_normalize(all_numeric_predictors())
 
 seas_recipe <- recipe(
   seasonal_vaccine ~ .,
   data = train_data
 ) %>%
   update_role(respondent_id, new_role = "ID") %>%
-  step_rm(h1n1_vaccine, strata) %>%
-  step_impute_median(all_of(numeric_cols)) %>%
-  step_unknown(all_of(categorical_cols)) %>%
-  step_dummy(all_of(categorical_cols)) %>%
-  step_normalize(all_of(numeric_cols))
+  step_rm(h1n1_vaccine) %>%
+  step_impute_median(all_numeric_predictors()) %>%
+  step_unknown(all_nominal_predictors()) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_numeric_predictors())
 
 # -----------------------------------------------
 # 6. CREATE WORKFLOWS
@@ -133,25 +142,25 @@ test_df_prepared <- test_df %>%
     strata = NA_character_
   )
 
-test_pred_h1n1 <- predict(final_h1n1, test_df_prepared, type = "prob") %>% pull(.pred_1)
-test_pred_seas <- predict(final_seas, test_df_prepared, type = "prob") %>% pull(.pred_1)
+test_pred_h1n1_log_reg <- predict(final_h1n1, test_df_prepared, type = "prob") %>% pull(.pred_1)
+test_pred_seas_log_reg <- predict(final_seas, test_df_prepared, type = "prob") %>% pull(.pred_1)
 
-head(test_pred_h1n1)
-head(test_pred_seas)
+head(test_pred_h1n1_log_reg)
+head(test_pred_seas_log_reg)
 
 # -----------------------------------------------
 # 10. CREATE SUBMISSION FILE
 # -----------------------------------------------
-submission <- tibble(
+submission_log_reg <- tibble(
   respondent_id = test_df$respondent_id,
-  h1n1_vaccine = test_pred_h1n1,
-  seasonal_vaccine = test_pred_seas
+  h1n1_vaccine = test_pred_h1n1_log_reg,
+  seasonal_vaccine = test_pred_seas_log_reg
 )
 
 # -----------------------------------------------
 # 11. SAVE SUBMISSION
 # -----------------------------------------------
-write_csv(submission, "vaccine_predictions_submission.csv")
+write_csv(submission_log_reg, "vaccine_predictions_submission.csv")
 
 # Print confirmation message
 cat("Submission file created successfully with", nrow(submission), "predictions.\n")
