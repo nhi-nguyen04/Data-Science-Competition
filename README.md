@@ -32,6 +32,8 @@ The competition uses **Area Under the ROC Curve (AUC-ROC)** as the evaluation me
 
 ## 📁 Repository Structure
 ```
+├── Class notes/
+│ ├── Best Practices (1).pdf
 ├── Data/
 │ ├── data/
 │ ├── submission_format.csv
@@ -40,10 +42,26 @@ The competition uses **Area Under the ROC Curve (AUC-ROC)** as the evaluation me
 │ └── training_set_labels.csv
 ├── Eda/
 │ ├── Basic_Analysis.Rmd
-│ └── Paulo_Analysis.R
+│ └── best_exploration.R
+│ └── explorative data analysis.R
 ├── Model/
 │ └── Model.Rmd
+│ └── bagged_trees_model.R
+│ └── base-model.R
+│ └── random-forest-workflow-finalized.R
+│ └── refined-dt.R
+│ └── xgboost-model.R
+├── Submissions/
+│ └── bagged_tree_workflow.csv
+│ └── finalized_dt_workflow.csv
+│ └── random_forest_workflow-2.csv
+│ └── random_forest_workflow.csv
+│ └── vaccine_predictions_submission-2.csv
+│ └── vaccine_predictions_submission.csv
+│ └── xgboost-workflow.csv
+├── .DS_Store
 ├── .Rhistory
+├── .gitignore
 ├── Flu.Rproj
 └── README.md
 ```
