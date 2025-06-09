@@ -56,3 +56,20 @@ We held a discord  meeting at 10:00am. All  members attended. We discussed the d
 would be to take a deeper look at the individual variables and preparations.
 A Google doc was set up in order for the members to collaborate on writing down ideas, tasks etc. 
 Going forward, each member will take a look at their task  and we'll meet again on Monday (19/05/2025) to discuss the progress.
+
+19/05/2025
+
+We held a discord  meeting at 10:00am. All  members attended. We discussed the following topics and presented our own approaches
+- EDA: Distributions, missing values, outliers, and correlations 
+- Cleaning & preprocessing
+- Feature engineering
+- Data leakage awareness
+  
+Going forward, each member will take a look will begin to merge their approach to the main branch.Our next task will be the creation of a baseline model  and we'll meet again on Friday (23/05/2025) to discuss the progress.
+
+23/05/2025
+We held a discord meeting at 1:40pm. All members attended. We discussed both of our baseline models and their scores based on the competetion website.
+Both models achieved a score over 0.80. 
+We looked at the models Accuracy, Precision, Recall, F1 Score and more, to find out where the model needs improvements.
+
+Going forward, both members will try to improve the model with the better score.
