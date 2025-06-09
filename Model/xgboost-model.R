@@ -10,6 +10,8 @@ library(vip) # for variable importance
 library(skimr) #Better Overview of the variables
 
 set.seed(6)
+
+
 # -----------------------------------------------
 # 2. LOAD DATA
 # -----------------------------------------------
@@ -17,6 +19,8 @@ train_features <- read_csv("Data/training_set_features.csv")
 train_labels   <- read_csv("Data/training_set_labels.csv")
 train_df       <- left_join(train_features, train_labels, by = "respondent_id")
 test_df        <- read_csv("Data/test_set_features.csv")
+
+
 # -----------------------------------------------
 # 3. DATA PREPARATION 
 # -----------------------------------------------
@@ -27,10 +31,10 @@ train_df <- train_df %>%
   )
 
 
-#this gives us a break down of the variables in the dataset
+# this gives us a break down of the variables in the dataset
 skim(train_df)
 
-# 3 IDENTIFY NUMERIC VS. CATEGORICAL BY TYPE
+# IDENTIFY NUMERIC VS. CATEGORICAL BY TYPE
 # (Rather than manually listing variable names)
 # First, convert any integer‐coded categories to factor *if* they’re not already numeric
 # For example: if 'age_group' was stored as integer 1:4 representing bins, do:
@@ -42,6 +46,7 @@ categorical_vars <- train_df %>% select(where(is.character), where(is.factor)) %
 # Remove the target + ID from those lists
 numeric_vars     <- setdiff(numeric_vars,    c("respondent_id"))
 categorical_vars <- setdiff(categorical_vars, c("respondent_id", "h1n1_vaccine", "seasonal_vaccine"))
+
 
 # -----------------------------------------------
 # 4. CREATE TWO SEPARATE SPLITS (ONE PER TARGET)
@@ -65,11 +70,9 @@ model <- boost_tree() %>%
   set_engine("xgboost")
 
 
-
 # -----------------------------------------------
 #6. R E C I P E  –– consistent imputation + dummies
 # -----------------------------------------------
-#
 h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   update_role(respondent_id, new_role = "ID") %>%
   # Remove the other target (seasonal) if it’s present
@@ -89,7 +92,6 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
 #tidy(h1n1_recipe, number = 4)
 
 
-
 seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   update_role(respondent_id, new_role = "ID") %>%
   step_rm(h1n1_vaccine) %>%
@@ -101,8 +103,9 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
 
 #tidy(seas_recipe, number = 4)
 
+
 # -----------------------------------------------
-#7.WORKFLOWS
+# 7.WORKFLOWS
 # -----------------------------------------------
 wf_h1n1 <- workflow() %>%
   add_recipe(h1n1_recipe) %>%
@@ -113,22 +116,19 @@ wf_seas <- workflow() %>%
   add_model(model)
 
 
-
-
 # -----------------------------------------------
-#8.Train the workflow
+# 8.Train the workflow
 # -----------------------------------------------
-# Train the workflow
 h1n1_dt_wkfl_fit <- wf_h1n1 %>% 
   last_fit(split = data_split_h1n1)
 
 seas_dt_wkfl_fit <- wf_seas %>% 
   last_fit(split = data_split_seas)
 
+
 # -----------------------------------------------
-#9.Calculate performance metrics on test data
+# 9.Calculate performance metrics on test data
 # -----------------------------------------------
-# Calculate performance metrics on test data
 h1n1_dt_wkfl_fit %>% 
   collect_metrics()
 
@@ -152,22 +152,24 @@ autoplot(roc_seas) +
 
 
 # -----------------------------------------------
-#10.Cross Validation
+# 10.Cross Validation
 # -----------------------------------------------
-#Cross-validation gives you a more robust estimate of your out-of-sample performance without 
-#the statistical pitfalls - it assesses your model more profoundly.
-
-#For speed
+# Cross-validation gives you a more robust estimate of your out-of-sample performance without 
+# the statistical pitfalls - it assesses your model more profoundly.
+ 
+# For speed
 plan(multisession, workers = 4) 
 
 set.seed(290)
-h1n1_folds <- vfold_cv(train_data_h1n1, v = 10,
+h1n1_folds <- vfold_cv(train_data_h1n1,
+                       v = 10,
                        strata = h1n1_vaccine)
 
 h1n1_folds
 
 
-seasonal_folds <- vfold_cv(train_data_seas, v = 10,
+seasonal_folds <- vfold_cv(train_data_seas,
+                           v = 10,
                            strata = seasonal_vaccine)
 
 seasonal_folds
@@ -178,9 +180,9 @@ data_metrics <- metric_set(roc_auc, sens, spec,accuracy)
 
 # Some info from data camp course:
 # A very high in-sample AUC like can be an indicator of overfitting. 
-#It is also possible that your dataset is just very well structured, or your model might just be terrific!
-#   To check which of these is true, you need to produce out-of-sample estimates of your AUC, and because 
-#you don't want to touch your test set yet, you can produce these using cross-validation on your training set.
+# It is also possible that the dataset is just very well structured, or the model might just be terrific
+# To check which of these is true, we need to produce out-of-sample estimates of the AUC, and because 
+# we don't want to touch the test set yet, we can produce these using cross-validation on the training set.
 
 
 # Fit resamples
@@ -228,20 +230,16 @@ seasonal_dt_rs_results %>%
 
 
 # -----------------------------------------------
-#11.Hyperparameter tuning
+# 11.Hyperparameter tuning
 # -----------------------------------------------
-
+# it is adviced that trees should be between 500-1000
 dt_tune_model <-boost_tree(
   learn_rate = tune(),
   tree_depth = tune(),
-  trees = 500, # it is adviced that trees should be between 500-1000
-  sample_size = tune()
-) %>%
+  trees = 500, 
+  sample_size = tune()) %>%
   set_engine("xgboost", importance = "impurity") %>%
   set_mode("classification") 
-
-
-
 
 
 dt_tune_model
@@ -262,14 +260,13 @@ seas_tune_wkfl <- wf_seas %>%
 seas_tune_wkfl
 
 
-
 # Finalize parameter ranges for both
 h1n1_params  <- finalize(parameters(dt_tune_model), train_data_h1n1)
 seas_params  <- finalize(parameters(dt_tune_model), train_data_seas)
 
 # Hyperparameter tuning with grid search
 
-#For speed
+# For speed
 plan(multisession, workers = 4) 
 
 
@@ -278,8 +275,6 @@ h1n1_grid <- grid_random(h1n1_params, size = 10)
 
 set.seed(215)
 seas_grid <- grid_random(seas_params, size = 10)
-
-
 
 
 # Hyperparameter tuning
@@ -305,9 +300,6 @@ seas_dt_tuning %>%
   collect_metrics()
 
 
-
-
-
 # Collect detailed tuning results
 h1n1_dt_tuning_results <- h1n1_dt_tuning %>% 
   collect_metrics(summarize = FALSE)
@@ -319,7 +311,6 @@ h1n1_dt_tuning_results %>%
   summarize(min_roc_auc = min(.estimate),
             median_roc_auc = median(.estimate),
             max_roc_auc = max(.estimate))
-
 
 
 # Collect detailed tuning results
@@ -334,8 +325,9 @@ seas_dt_tuning_results %>%
             median_roc_auc = median(.estimate),
             max_roc_auc = max(.estimate))
 
+
 # -----------------------------------------------
-#12.Selecting the best model
+# 12.Selecting the best model
 # -----------------------------------------------
 
 # Display 5 best performing models
@@ -363,7 +355,7 @@ best_seas_dt_model
 
 
 # -----------------------------------------------
-#13.Finalize your workflow
+# 13.Finalize your workflow
 # -----------------------------------------------
 final_h1n1_tune_wkfl <- h1n1_tune_wkfl %>% 
   finalize_workflow(best_h1n1_dt_model)
@@ -376,15 +368,14 @@ final_seas_tune_wkfl <- seas_tune_wkfl %>%
 
 final_seas_tune_wkfl
 
------------------------------------------------
-  # 14. LAST_FIT ON THE HELD-OUT SPLITS
-  # -----------------------------------------------
-h1n1_final_fit <- 
-  final_h1n1_tune_wkfl %>% 
+
+# -----------------------------------------------
+# 14. LAST_FIT ON THE HELD-OUT SPLITS
+# -----------------------------------------------
+h1n1_final_fit <- final_h1n1_tune_wkfl %>% 
   last_fit(split = data_split_h1n1)
 
-seas_final_fit <- 
-  final_seas_tune_wkfl %>% 
+seas_final_fit <- final_seas_tune_wkfl %>% 
   last_fit(split = data_split_seas)
 
 
@@ -403,29 +394,32 @@ seas_final_fit  %>% collect_metrics()
 #library(ggplot2)
 
 # 1) Pull out predictions (with probabilities)
-h1n1_preds <- h1n1_final_fit %>% collect_predictions()
-seas_preds <- seas_final_fit  %>% collect_predictions()
+h1n1_preds <- h1n1_final_fit %>% 
+  collect_predictions()
+seas_preds <- seas_final_fit  %>% 
+  collect_predictions()
 
 # 2) Compute ROC curve data
 roc_h1n1 <- roc_curve(h1n1_preds, truth = h1n1_vaccine, .pred_1)
 roc_seas <- roc_curve(seas_preds, truth = seasonal_vaccine, .pred_1)
 
 # 3a) Plot separately
-autoplot(roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve")
-autoplot(roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve")
+autoplot(roc_h1n1) +
+  ggtitle("Final H1N1 Vaccine ROC Curve")
+autoplot(roc_seas) + 
+  ggtitle("Final Seasonal Vaccine ROC Curve")
+
+
 # -----------------------------------------------
 # 17. TRAIN FINAL MODELS ON FULL TRAINING DATA
 # -----------------------------------------------
-
-
 final_h1n1 <- fit(final_h1n1_tune_wkfl, train_df)
 final_seas <- fit(final_seas_tune_wkfl, train_df)
 
 
-#Here I am checking for variable importance
+# Here I am checking for variable importance
 vip::vip(final_h1n1, num_features= 15)
 vip::vip(final_seas,  num_features= 15)
-
 
 
 # -----------------------------------------------
@@ -436,11 +430,12 @@ test_df_prepared <- test_df %>%
   mutate(
     h1n1_vaccine = factor(NA, levels = c(1, 0)),
     seasonal_vaccine = factor(NA, levels = c(1, 0)),
-    strata = NA_character_
-  )
+    strata = NA_character_)
 
-test_pred_h1n1_xgboost <- predict(final_h1n1, test_df_prepared, type = "prob") %>% pull(.pred_1)
-test_pred_seas_xgboost <- predict(final_seas, test_df_prepared, type = "prob") %>% pull(.pred_1)
+test_pred_h1n1_xgboost <- predict(final_h1n1, test_df_prepared, type = "prob") %>%
+  pull(.pred_1)
+test_pred_seas_xgboost <- predict(final_seas, test_df_prepared, type = "prob") %>% 
+  pull(.pred_1)
 
 head(test_pred_h1n1_xgboost)
 head(test_pred_seas_xgboost)
@@ -454,6 +449,7 @@ submission_xgboost <- tibble(
   h1n1_vaccine = test_pred_h1n1_xgboost,
   seasonal_vaccine = test_pred_seas_xgboost
 )
+
 
 # -----------------------------------------------
 # 20. SAVE SUBMISSION
