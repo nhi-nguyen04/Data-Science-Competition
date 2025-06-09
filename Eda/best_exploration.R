@@ -1,5 +1,6 @@
-
-#Packages we need
+# -----------------------------------------------
+# 1. SET UP ENVIRONMENT
+# -----------------------------------------------
 library(ggplot2)
 library(dplyr)
 library(tidyr)
@@ -11,6 +12,7 @@ library(tableone)
 library(knitr)
 library(tidyverse) 
 library(naniar)
+library(skimr) #Better Overview of the variables
 
 # theme set up for now
 # probably going to change in the future
@@ -30,10 +32,21 @@ custom_theme <- theme_minimal() +
   )
 theme_set(custom_theme)
 
-#  loading the data 
+# correct color mapping
+vaccine_colors <- c(
+  "Not Vaccinated" = "#E15759",
+  "Vaccinated"     = "#4E79A7"
+)
+
+# -----------------------------------------------
+# 2. LOAD DATA
+# -----------------------------------------------
 features_df <- read.csv("Data/training_set_features.csv")
 labels_df   <- read.csv("Data/training_set_labels.csv")
 
+# -----------------------------------------------
+# 3. QUICK DATA INSPECTION
+# -----------------------------------------------
 lapply(features_df, unique)
 
 #the labels don't have to be processed
@@ -47,16 +60,9 @@ features_df %>%
   select(where(~ any(is.na(.)))) %>%
   vis_miss()
 
-
-
-# correct color mapping
-vaccine_colors <- c(
-  "Not Vaccinated" = "#E15759",
-  "Vaccinated"     = "#4E79A7"
-)
-
-
-
+# -----------------------------------------------
+# 4. PLOTS DESIGN -> VACCINATION RATE
+# -----------------------------------------------
 
 #plot function
 create_vaccine_plot <- function(data, vaccine_type) {
@@ -91,6 +97,10 @@ create_vaccine_plot <- function(data, vaccine_type) {
     ylim(0,100)
 }
 
+# -----------------------------------------------
+# 5. VACCINATION RATE PLOT + VISUALIZATION
+# -----------------------------------------------
+
 # create the plots  & combine them
 plot_h1n1     <- create_vaccine_plot(labels_df, "h1n1")
 plot_seasonal <- create_vaccine_plot(labels_df, "seasonal")
@@ -104,10 +114,9 @@ vaccine_plots <- plot_h1n1 + plot_seasonal +
   )
 
 vaccine_plots
-
-
-
-
+# -----------------------------------------------
+# 6. OBSERVATION OF VACCINATION RATE PLOT 
+# -----------------------------------------------
 # Observation
 # A bit over half of the individuals received the seasonal flu vaccine, while only about 21% received the H1N1 flu vaccine.
 # 
@@ -127,8 +136,9 @@ vaccine_plots
 # 
 # Why It Matters
 # Balanced data allows models to learn both outcomes more fairly and reliably. When classes are imbalanced, the model may default to predicting the majority class, resulting in poor performance on the less common — but potentially more important — cases.
+
 #------------------------------
-# 2. Improved Cross-Tabulation Analysis
+# 7.  Cross-Tabulation Analysis
 #------------------------------
 #Are the two target variables independent? Let's take a look.
 
@@ -169,9 +179,15 @@ heatmap_plot <- ggplot(cross_tab_df, aes(x = Seasonal, y = H1N1, fill = Percenta
   ) +
   coord_fixed()
 
+#------------------------------
+# 8.  CROSS-TABULATION ANALYSIS VISUALIZATION
+#------------------------------
+
 heatmap_plot
 
-
+#------------------------------
+# 9.  CROSS-TABULATION ANALYSIS OBSERVATION
+#------------------------------
 # 
 # #The Phi coefficient (ϕ) is a statistical measure used to determine the association between two binary variables — variables that only take on two possible values.
 # Using the Phi coefficient between h1n1_vaccine and seasonal_vaccine helps us:
@@ -189,13 +205,8 @@ heatmap_plot
 # But there’s still plenty of variation — many people may have taken only one vaccine or neither.
 
 #------------------------------
-# 3. Joining Features and Labels
+#10. JOINING FEATURES AND LABELS + config
 #------------------------------
-#Just checking the df
-
-# Join the datasets 
-joined_df <- features_df %>%
-  inner_join(labels_df, by = "respondent_id")
 
 joined_df <- features_df %>%
   inner_join(labels_df, by = "respondent_id") %>%
@@ -271,7 +282,7 @@ if(nrow(joined_df) != nrow(features_df) || nrow(joined_df) != nrow(labels_df)) {
 #Nice
 
 #------------------------------
-# 4. Improved Vaccination Rate Function
+# 11. MORE PLOTS ON VACCINATION RATE FOR DIFFERENT FEATURES
 #------------------------------
 vaccination_rate_plot <- function(col, target, data, title = NULL, thresh = 10) {
   # Filter out NA + empty values
@@ -399,6 +410,15 @@ vaccination_rate_plot <- function(col, target, data, title = NULL, thresh = 10) 
 h1n1_plots     <- list()
 seasonal_plots <- list()
 
+cols_to_plot <- c(
+  "h1n1_concern",
+  "h1n1_knowledge",
+  "opinion_h1n1_vacc_effective",
+  "age_group",
+  "opinion_seas_risk",
+  "education"
+)
+
 #Better naming of varibale here
 for (col in cols_to_plot) {
   pretty <- tools::toTitleCase(gsub("_"," ",col))
@@ -431,110 +451,17 @@ seasonal_list_plots <- (seasonal_plots$h1n1_concern +
     theme = theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5))
   )
 seasonal_list_plots
-#------------------------------
-# 6. Advanced Analysis - Correlation Matrix
-#------------------------------
-
-# Select numerical variables
-numeric_cols <- sapply(joined_df, is.numeric)
-numeric_features <- joined_df[, numeric_cols]
-
-# Remove ID column and non-informative columns
-numeric_features <- numeric_features %>%
-  select(-respondent_id, contains("_vaccine"))
-
-# Calculate correlation matrix
-cor_matrix <- cor(numeric_features, use = "pairwise.complete.obs")
-
-# Convert to data frame for plotting
-cor_df <- as.data.frame(as.table(cor_matrix))
-names(cor_df) <- c("Feature1", "Feature2", "Correlation")
-
-# Create correlation heatmap
-correlation_plot <- ggplot(cor_df, aes(x = Feature1, y = Feature2, fill = Correlation)) +
-  geom_tile() +
-  scale_fill_gradient2(low = "#E15759", mid = "white", high = "#4E79A7", midpoint = 0) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
-    axis.text.y = element_text(size = 8)
-  ) +
-  labs(
-    title = "Correlation Matrix of Numerical Features",
-    subtitle = "Blue indicates positive correlation, red indicates negative correlation"
-  ) +
-  coord_fixed()
-
-correlation_plot
 
 #------------------------------
-# 7. Data Leakage Assessment
+# 12. DEEPER CHECK ON MISSSIGNESS
 #------------------------------
-
-# Check for potential data leakage - correlation between target variables and predictors
-calculate_target_correlations <- function(data, target_col) {
-  # Get potentially problematic high correlations
-  numeric_data <- data %>% 
-    select_if(is.numeric) %>%
-    select(-respondent_id) # Remove ID column
-  
-  # Calculate correlations with target
-  target_cors <- cor(numeric_data[,target_col], numeric_data, use = "pairwise.complete.obs")
-  
-  # Convert to data frame
-  target_cors_df <- as.data.frame(t(target_cors))
-  names(target_cors_df) <- c("Correlation")
-  target_cors_df$Feature <- rownames(target_cors_df)
-  
-  # Remove the target itself
-  target_cors_df <- target_cors_df %>% 
-    filter(Feature != target_col) %>%
-    arrange(desc(abs(Correlation)))
-  
-  return(target_cors_df)
-}
-
-# Calculate correlations for both target variables
-h1n1_cors <- calculate_target_correlations(joined_df, "h1n1_vaccine")
-seasonal_cors <- calculate_target_correlations(joined_df, "seasonal_vaccine")
-
-# Print top correlations for both targets
-cat("Top 10 feature correlations with H1N1 vaccination:\n")
-print(head(h1n1_cors, 10))
-
-cat("\nTop 10 feature correlations with Seasonal vaccination:\n")
-print(head(seasonal_cors, 10))
-
-# Check for potential data leakage between opinion variables and target
-opinion_vars <- grep("opinion_", colnames(joined_df), value = TRUE)
-cat("\nPotential opinion variables that might cause data leakage:")
-print(opinion_vars)
-
-cat("\nData Leakage Assessment:")
-cat("\n------------------------")
-cat("\n1. Target variable correlations have been checked.")
-cat("\n2. Opinion variables should be carefully considered as they might contain information collected after vaccination decisions.")
-cat("\n3. No direct leakage of target variables to features was found through ID or other direct mechanisms.")
-cat("\n4. Time-related information should be verified to ensure features were collected before vaccination decisions.")
-cat("\n5. Cross-validation will be implemented in model training to further protect against data leakage.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 data_train <- read_csv("Data/training_set_features.csv")
 data_train_labels <- read_csv("Data/training_set_labels.csv")
 
 # Merge training features and labels
 df <- left_join(data_train, data_train_labels, by = "respondent_id")
+
+skim(df)
 
 # Identify data types for proper categorization
 df_types <- data.frame(
@@ -547,7 +474,7 @@ df_types <- data.frame(
 )
 
 cat("\nClassification of variables by type:\n")
-print_table(df_types)
+df_types
 
 # Reclassify variables based on their actual type (not just R's class)
 categorical_features <- c(
@@ -576,9 +503,17 @@ df_updated <- df %>%
 
 
 # -----------------------------------------------------
-# 3. MISSING VALUES ANALYSIS
+# 12 - a) -. MISSING VALUES ANALYSIS
 # -----------------------------------------------------
-cat("\n## 3. MISSING VALUES ANALYSIS\n\n")
+cb_palette <- c(
+  "#E69F00",  # orange
+  "#56B4E9",  # sky blue
+  "#009E73",  # bluish green
+  "#F0E442",  # yellow
+  "#0072B2",  # blue
+  "#D55E00",  # vermillion
+  "#CC79A7"   # reddish purple
+)
 
 # Summary of missing values for all columns
 missing_summary <- df_updated %>%
@@ -603,7 +538,7 @@ missing_summary <- missing_summary %>%
   )
 
 cat("Missing values summary:\n")
-print_table(missing_summary %>% filter(missing > 0))
+missing_summary %>% filter(missing > 0)
 
 # Create a better missing data visualization
 missing_plot <- ggplot(missing_summary %>% filter(missing > 0), 
@@ -621,4 +556,4 @@ missing_plot <- ggplot(missing_summary %>% filter(missing > 0),
   ) +
   theme(axis.text.y = element_text(size = 8))
 
-print(missing_plot)
+missing_plot
