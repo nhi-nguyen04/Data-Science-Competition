@@ -93,6 +93,12 @@ We looked at the models Accuracy, Precision, Recall, F1 Score and more, to find 
 
 Going forward, both members will try to improve the model with the better score.
 
+13/06/2025
+
+We held a discord meeting at 2:15pm. All members attended. We discussed our further plans.
+Looking at the issues, we assigned each member equal tasks to do and finish before the 22nd.
+After finishing all tasks, we will look at the models again.
+In the next meeting with the professor, we will share our results and ask for feedback.
 
 
 ## 🏆 Scores:
