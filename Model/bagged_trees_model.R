@@ -56,7 +56,7 @@ eval_data_seas  <- testing(data_split_seas)
 # -----------------------------------------------
 # 5. SPECIFY BASE MODEL (RPART TREE)
 # -----------------------------------------------
-model <- bag_tree() %>%
+bt_model <- bag_tree() %>%
   set_engine("rpart", times = 20) %>%
   set_mode("classification") 
 
@@ -93,32 +93,33 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
 # -----------------------------------------------
 # 7.WORKFLOWS
 # -----------------------------------------------
-wf_h1n1 <- workflow() %>%
+bt_wf_h1n1 <- workflow() %>%
   add_recipe(h1n1_recipe) %>%
-  add_model(model)
+  add_model(bt_model)
 
-wf_seas <- workflow() %>%
+bt_wf_seas <- workflow() %>%
   add_recipe(seas_recipe) %>%
-  add_model(model)
+  add_model(bt_model)
 
 
 # -----------------------------------------------
 # 8.Train the workflow
 # -----------------------------------------------
-h1n1_dt_wkfl_fit <- wf_h1n1 %>% 
+bt_h1n1_dt_wkfl_fit <- bt_wf_h1n1 %>% 
   last_fit(split = data_split_h1n1)
 
-seas_dt_wkfl_fit <- wf_seas %>% 
+
+bt_seas_dt_wkfl_fit <- bt_wf_seas %>% 
   last_fit(split = data_split_seas)
 
 
 # -----------------------------------------------
 # 9.Calculate performance metrics on test data
 # -----------------------------------------------
-h1n1_dt_wkfl_fit %>% 
+bt_metrics_h1n1 <- bt_h1n1_dt_wkfl_fit %>% 
   collect_metrics()
 
-seas_dt_wkfl_fit %>% 
+bt_metrics_seas <- bt_seas_dt_wkfl_fit %>% 
   collect_metrics()
 
 
@@ -147,42 +148,42 @@ data_metrics <- metric_set(roc_auc, sens, spec)
 
 
 # Fit resamples
-h1n1_dt_rs <- wf_h1n1 %>% 
+bt_h1n1_dt_rs <- bt_wf_h1n1 %>% 
   fit_resamples(resamples = h1n1_folds,
                 metrics = data_metrics)
 
-seasonal_dt_rs <- wf_seas %>% 
+bt_seasonal_dt_rs <- bt_wf_seas %>% 
   fit_resamples(resamples = seasonal_folds,
                 metrics = data_metrics)
 
 
 # View performance metrics
 
-h1n1_dt_rs %>% 
+bt_rs_metrics_h1n1 <- bt_h1n1_dt_rs %>% 
   collect_metrics()
 
-seasonal_dt_rs %>% 
+bt_rs_metrics_seas <- bt_seasonal_dt_rs %>% 
   collect_metrics()
 
 
 
 # Detailed cross validation results
-h1n1_dt_rs_results <- h1n1_dt_rs %>% 
+bt_h1n1_dt_rs_results <- bt_h1n1_dt_rs %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore model performance for decision tree
-h1n1_dt_rs_results %>% 
+bt_rs_perf_h1n1 <- bt_h1n1_dt_rs_results %>% 
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
             median = median(.estimate),
             max = max(.estimate))
 
 
-seasonal_dt_rs_results <- seasonal_dt_rs %>% 
+bt_seasonal_dt_rs_results <- bt_seasonal_dt_rs %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore model performance for decision tree
-seasonal_dt_rs_results %>% 
+bt_rs_perf_seas <- bt_seasonal_dt_rs_results %>% 
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
             median = median(.estimate),
@@ -192,8 +193,7 @@ seasonal_dt_rs_results %>%
 # -----------------------------------------------
 # 11.Hyperparameter tuning
 # -----------------------------------------------
-
-dt_tune_model <-bag_tree(cost_complexity = tune(),
+bt_dt_tune_model <- bag_tree(cost_complexity = tune(),
                          tree_depth = tune(),
                          min_n = tune()) %>%
   set_engine("rpart", times = 20) %>%
@@ -201,62 +201,62 @@ dt_tune_model <-bag_tree(cost_complexity = tune(),
   
   
 
-dt_tune_model
+bt_dt_tune_model
 
 
 # Create a tuning workflow
-h1n1_tune_wkfl <- wf_h1n1 %>% 
+bt_h1n1_tune_wkfl <- bt_wf_h1n1 %>% 
   # Replace model
-  update_model(dt_tune_model)
+  update_model(bt_dt_tune_model)
 
-h1n1_tune_wkfl
+bt_h1n1_tune_wkfl
 
 
-seas_tune_wkfl <- wf_seas %>% 
+bt_seas_tune_wkfl <- bt_wf_seas %>% 
   # Replace model
-  update_model(dt_tune_model)
+  update_model(bt_dt_tune_model)
 
-seas_tune_wkfl
+bt_seas_tune_wkfl
 
 
 # Hyperparameter tuning with grid search
 set.seed(214)
-dt_grid <- grid_random(parameters(dt_tune_model),
+bt_dt_grid <- grid_random(parameters(bt_dt_tune_model),
                        size = 5)
 
-dt_grid
+bt_dt_grid
 
 
 # Hyperparameter tuning
-h1n1_dt_tuning <- h1n1_tune_wkfl %>% 
+bt_h1n1_dt_tuning <- bt_h1n1_tune_wkfl %>% 
   tune_grid(resamples = h1n1_folds,
-            grid = dt_grid,
+            grid = bt_dt_grid,
             metrics = data_metrics)
 
 
-seas_dt_tuning <- seas_tune_wkfl %>% 
+bt_seas_dt_tuning <- bt_seas_tune_wkfl %>% 
   tune_grid(resamples = seasonal_folds,
-            grid = dt_grid,
+            grid = bt_dt_grid,
             metrics = data_metrics)
 
 
 # View results
-h1n1_dt_tuning %>% 
+bt_h1n1_dt_tuning %>% 
   collect_metrics()
 
 
 # View results
-seas_dt_tuning %>% 
+bt_seas_dt_tuning %>% 
   collect_metrics()
 
 
 
 # Collect detailed tuning results
-h1n1_dt_tuning_results <- h1n1_dt_tuning %>% 
+bt_h1n1_dt_tuning_results <- bt_h1n1_dt_tuning %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore detailed ROC AUC results for each fold
-h1n1_dt_tuning_results %>% 
+bt_h1n1_dt_tuning_results %>% 
   filter(.metric == "roc_auc") %>% 
   group_by(id) %>% 
   summarize(min_roc_auc = min(.estimate),
@@ -266,11 +266,11 @@ h1n1_dt_tuning_results %>%
 
 
 # Collect detailed tuning results
-seas_dt_tuning_results <- seas_dt_tuning %>% 
+bt_seas_dt_tuning_results <- bt_seas_dt_tuning %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore detailed ROC AUC results for each fold
-seas_dt_tuning_results %>% 
+bt_seas_dt_tuning_results %>% 
   filter(.metric == "roc_auc") %>% 
   group_by(id) %>% 
   summarize(min_roc_auc = min(.estimate),
@@ -283,53 +283,76 @@ seas_dt_tuning_results %>%
 # -----------------------------------------------
 
 # Display 5 best performing models
-h1n1_dt_tuning %>% 
+bt_h1n1_dt_tuning %>% 
   show_best(metric = "roc_auc", n = 5)
 
-seas_dt_tuning %>% 
+bt_seas_dt_tuning %>% 
   show_best(metric = "roc_auc", n = 5)
 
 
 
 # Select based on best performance
-best_h1n1_dt_model <- h1n1_dt_tuning %>% 
+bt_best_h1n1_dt_model <- bt_h1n1_dt_tuning %>% 
   # Choose the best model based on roc_auc
   select_best(metric = "roc_auc")
 
-best_h1n1_dt_model
+bt_best_h1n1_dt_model
 
 
-best_seas_dt_model <- seas_dt_tuning %>% 
+bt_best_seas_dt_model <- bt_seas_dt_tuning %>% 
   # Choose the best model based on roc_auc
   select_best(metric = "roc_auc")
 
-best_seas_dt_model
+bt_best_seas_dt_model
 
 
 # -----------------------------------------------
 # 13.Finalize your workflow
 # -----------------------------------------------
-final_h1n1_tune_wkfl <- h1n1_tune_wkfl %>% 
-  finalize_workflow(best_h1n1_dt_model)
+bt_final_h1n1_tune_wkfl <- bt_h1n1_tune_wkfl %>% 
+  finalize_workflow(bt_best_h1n1_dt_model)
 
-final_h1n1_tune_wkfl
+bt_final_h1n1_tune_wkfl
 
 
-final_seas_tune_wkfl <- seas_tune_wkfl %>% 
-  finalize_workflow(best_seas_dt_model)
+bt_final_seas_tune_wkfl <- bt_seas_tune_wkfl %>% 
+  finalize_workflow(bt_best_seas_dt_model)
 
-final_seas_tune_wkfl
+bt_final_seas_tune_wkfl
 
 
 # -----------------------------------------------
 # 14. TRAIN FINAL MODELS ON FULL TRAINING DATA
 # -----------------------------------------------
-final_h1n1 <- fit(final_h1n1_tune_wkfl, train_df)
-final_seas <- fit(final_seas_tune_wkfl, train_df)
+bt_final_h1n1 <- fit(bt_final_h1n1_tune_wkfl, train_df)
+bt_final_seas <- fit(bt_final_seas_tune_wkfl, train_df)
 
 
 # -----------------------------------------------
-# 15. MAKE PREDICTIONS ON TEST DATA
+# 15. ROC CURVE VISUALIZATION (via last_fit results)
+# -----------------------------------------------
+bt_final_h1n1_fit <- bt_final_h1n1_tune_wkfl %>%
+  last_fit(split = data_split_h1n1)
+
+bt_final_seas_fit <- bt_final_seas_tune_wkfl %>%
+  last_fit(split = data_split_seas)
+
+# 1) Pull out predictions (with probabilities)
+bt_h1n1_preds <- bt_final_h1n1_fit %>% 
+  collect_predictions()
+bt_seas_preds <- bt_final_seas_fit  %>%
+  collect_predictions()
+
+# 2) Compute ROC curve data
+bt_roc_h1n1 <- roc_curve(bt_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+bt_roc_seas <- roc_curve(bt_seas_preds, truth = seasonal_vaccine, .pred_1)
+
+# 3a) Plot separately
+autoplot(bt_roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve (Bagged Trees)")
+autoplot(bt_roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve (Bagged Trees)")
+
+# -----------------------------------------------
+# 16. MAKE PREDICTIONS ON TEST DATA
 # -----------------------------------------------
 # Add missing columns to test data to match training structure
 test_df_prepared <- test_df %>%
@@ -349,7 +372,7 @@ head(test_pred_seas_bagged_tree)
 
 
 # -----------------------------------------------
-# 16. CREATE SUBMISSION FILE
+# 17. CREATE SUBMISSION FILE
 # -----------------------------------------------
 submission_bagged_tree <- tibble(
   respondent_id = test_df$respondent_id,
@@ -359,6 +382,6 @@ submission_bagged_tree <- tibble(
 
 
 # -----------------------------------------------
-# 17. SAVE SUBMISSION
+# 18. SAVE SUBMISSION
 # -----------------------------------------------
 write_csv(submission_bagged_tree, "bagged_tree_workflow.csv")

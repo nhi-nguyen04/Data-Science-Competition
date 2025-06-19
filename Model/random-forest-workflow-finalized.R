@@ -60,7 +60,7 @@ eval_data_seas  <- testing(data_split_seas)
 # -----------------------------------------------
 # 5. SPECIFY BASE MODEL (RPART TREE)
 # -----------------------------------------------
-model <- rand_forest() %>%
+rf_model <- rand_forest() %>%
   set_mode("classification") %>%
   set_engine("ranger", importance = "impurity")
 
@@ -101,46 +101,46 @@ tidy(seas_recipe, number = 4)
 # -----------------------------------------------
 # 7.WORKFLOWS
 # -----------------------------------------------
-wf_h1n1 <- workflow() %>%
+rf_wf_h1n1 <- workflow() %>%
   add_recipe(h1n1_recipe) %>%
-  add_model(model)
+  add_model(rf_model)
 
-wf_seas <- workflow() %>%
+rf_wf_seas <- workflow() %>%
   add_recipe(seas_recipe) %>%
-  add_model(model)
+  add_model(rf_model)
 
 
 # -----------------------------------------------
-#8.Train the workflow
+# 8.Train the workflow
 # -----------------------------------------------
-h1n1_dt_wkfl_fit <- wf_h1n1 %>% 
+rf_h1n1_dt_wkfl_fit <- rf_wf_h1n1 %>% 
   last_fit(split = data_split_h1n1)
 
-seas_dt_wkfl_fit <- wf_seas %>% 
+rf_seas_dt_wkfl_fit <- rf_wf_seas %>% 
   last_fit(split = data_split_seas)
 
 # -----------------------------------------------
 # 9.Calculate performance metrics on test data
 # -----------------------------------------------
-h1n1_dt_wkfl_fit %>% 
+rf_metrics_h1n1 <- rf_h1n1_dt_wkfl_fit %>% 
   collect_metrics()
 
-seas_dt_wkfl_fit %>% 
+rf_metrics_seas <- rf_seas_dt_wkfl_fit %>% 
   collect_metrics()
 
 # 1. Pull out predictions (with class‐probabilities)
-h1n1_preds <- collect_predictions(h1n1_dt_wkfl_fit)
-seas_preds <- collect_predictions(seas_dt_wkfl_fit)
+rf_h1n1_preds <- collect_predictions(rf_h1n1_dt_wkfl_fit)
+rf_seas_preds <- collect_predictions(rf_seas_dt_wkfl_fit)
 
 # 2. Compute ROC curve data
-roc_h1n1 <- roc_curve(h1n1_preds, truth = h1n1_vaccine, .pred_1)
-roc_seas <- roc_curve(seas_preds, truth = seasonal_vaccine, .pred_1)
+rf_roc_h1n1 <- roc_curve(rf_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+rf_roc_seas <- roc_curve(rf_seas_preds, truth = seasonal_vaccine, .pred_1)
 
 # 3a. Plot separately
-autoplot(roc_h1n1) + 
+autoplot(rf_roc_h1n1) + 
   ggtitle("H1N1 Vaccine ROC Curve")
 
-autoplot(roc_seas) + 
+autoplot(rf_roc_seas) + 
   ggtitle("Seasonal Vaccine ROC Curve")
 
 
@@ -172,11 +172,11 @@ data_metrics <- metric_set(roc_auc, sens, spec)
 
 
 # Fit resamples
-h1n1_dt_rs <- wf_h1n1 %>% 
+rf_h1n1_dt_rs <- rf_wf_h1n1 %>% 
   fit_resamples(resamples = h1n1_folds,
                 metrics = data_metrics)
 
-seasonal_dt_rs <- wf_seas %>% 
+rf_seasonal_dt_rs <- rf_wf_seas %>% 
   fit_resamples(resamples = seasonal_folds,
                 metrics = data_metrics)
 
@@ -189,30 +189,30 @@ seasonal_dt_rs <- wf_seas %>%
 # To check which of these is true, we need to produce out-of-sample estimates of the AUC, and because 
 # we don't want to touch the test set yet, we can produce these using cross-validation on the training set.
 
-h1n1_dt_rs %>% 
+rf_rs_metrics_h1n1 <- rf_h1n1_dt_rs %>% 
   collect_metrics()
 
-seasonal_dt_rs %>% 
+rf_rs_metrics_seas <- rf_seasonal_dt_rs %>% 
   collect_metrics()
 
 
 # Detailed cross validation results
-h1n1_dt_rs_results <- h1n1_dt_rs %>% 
+rf_h1n1_dt_rs_results <- rf_h1n1_dt_rs %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore model performance for decision tree
-h1n1_dt_rs_results %>% 
+rf_h1n1_dt_rs_results %>% 
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
             median = median(.estimate),
             max = max(.estimate))
 
 
-seasonal_dt_rs_results <- seasonal_dt_rs %>% 
+rf_seasonal_dt_rs_results <- rf_seasonal_dt_rs %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore model performance for decision tree
-seasonal_dt_rs_results %>% 
+rf_seasonal_dt_rs_results %>% 
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
             median = median(.estimate),
@@ -223,7 +223,7 @@ seasonal_dt_rs_results %>%
 # 11.Hyperparameter tuning
 # -----------------------------------------------
 # it is adviced that trees should be between 500-1000
-dt_tune_model <-rand_forest(
+rf_dt_tune_model <- rand_forest(
   mtry = tune(),
   min_n = tune(),
   trees = 500) %>%
@@ -231,70 +231,70 @@ dt_tune_model <-rand_forest(
   set_mode("classification") 
 
 
-dt_tune_model
+rf_dt_tune_model
 
 
 # Create a tuning workflow
-h1n1_tune_wkfl <- wf_h1n1 %>% 
+rf_h1n1_tune_wkfl <- rf_wf_h1n1 %>% 
   # Replace model
-  update_model(dt_tune_model)
+  update_model(rf_dt_tune_model)
 
-h1n1_tune_wkfl
+rf_h1n1_tune_wkfl
 
 
-seas_tune_wkfl <- wf_seas %>% 
+rf_seas_tune_wkfl <- rf_wf_seas %>% 
   # Replace model
-  update_model(dt_tune_model)
+  update_model(rf_dt_tune_model)
 
-seas_tune_wkfl
+rf_seas_tune_wkfl
 
 
 # Finalize parameter ranges for both
-h1n1_params  <- finalize(parameters(dt_tune_model), train_data_h1n1)
-seas_params  <- finalize(parameters(dt_tune_model), train_data_seas)
+rf_h1n1_params  <- finalize(parameters(rf_dt_tune_model), train_data_h1n1)
+rf_seas_params  <- finalize(parameters(rf_dt_tune_model), train_data_seas)
 
 # Hyperparameter tuning with grid search
 
-#For speed
+# For speed
 plan(multisession, workers = 4) 
 
 
 set.seed(214)
-h1n1_grid <- grid_random(h1n1_params, size = 10)
+rf_h1n1_grid <- grid_random(rf_h1n1_params, size = 10)
 
 set.seed(215)
-seas_grid <- grid_random(seas_params, size = 10)
+rf_seas_grid <- grid_random(rf_seas_params, size = 10)
 
 
 # Hyperparameter tuning
-h1n1_dt_tuning <- h1n1_tune_wkfl %>% 
+rf_h1n1_dt_tuning <- rf_h1n1_tune_wkfl %>% 
   tune_grid(resamples = h1n1_folds,
-            grid = h1n1_grid,
+            grid = rf_h1n1_grid,
             metrics = data_metrics)
 
 
-seas_dt_tuning <- seas_tune_wkfl %>% 
+rf_seas_dt_tuning <- rf_seas_tune_wkfl %>% 
   tune_grid(resamples = seasonal_folds,
-            grid = seas_grid,
+            grid = rf_seas_grid,
             metrics = data_metrics)
 
 
 # View results
-h1n1_dt_tuning %>% 
+rf_h1n1_dt_tuning %>% 
   collect_metrics()
 
 
 # View results
-seas_dt_tuning %>% 
+rf_seas_dt_tuning %>% 
   collect_metrics()
 
 
 # Collect detailed tuning results
-h1n1_dt_tuning_results <- h1n1_dt_tuning %>% 
+rf_h1n1_dt_tuning_results <- rf_h1n1_dt_tuning %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore detailed ROC AUC results for each fold
-h1n1_dt_tuning_results %>% 
+rf_h1n1_dt_tuning_results %>% 
   filter(.metric == "roc_auc") %>% 
   group_by(id) %>% 
   summarize(min_roc_auc = min(.estimate),
@@ -303,11 +303,11 @@ h1n1_dt_tuning_results %>%
 
 
 # Collect detailed tuning results
-seas_dt_tuning_results <- seas_dt_tuning %>% 
+rf_seas_dt_tuning_results <- rf_seas_dt_tuning %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore detailed ROC AUC results for each fold
-seas_dt_tuning_results %>% 
+rf_seas_dt_tuning_results %>% 
   filter(.metric == "roc_auc") %>% 
   group_by(id) %>% 
   summarize(min_roc_auc = min(.estimate),
@@ -319,52 +319,52 @@ seas_dt_tuning_results %>%
 # 12.Selecting the best model
 # -----------------------------------------------
 # Display 5 best performing models
-h1n1_dt_tuning %>% 
+rf_h1n1_dt_tuning %>% 
   show_best(metric = "roc_auc", n = 5)
 
-seas_dt_tuning %>% 
+rf_seas_dt_tuning %>% 
   show_best(metric = "roc_auc", n = 5)
 
 
 # Select based on best performance
-best_h1n1_dt_model <- h1n1_dt_tuning %>% 
+rf_best_h1n1_dt_model <- rf_h1n1_dt_tuning %>% 
   # Choose the best model based on roc_auc
   select_best(metric = 'roc_auc')
 
-best_h1n1_dt_model
+rf_best_h1n1_dt_model
 
 
-best_seas_dt_model <- seas_dt_tuning %>% 
+rf_best_seas_dt_model <- rf_seas_dt_tuning %>% 
   # Choose the best model based on roc_auc
   select_best(metric = 'roc_auc')
 
-best_seas_dt_model
+rf_best_seas_dt_model
 
 
 # -----------------------------------------------
 # 13.Finalize your workflow
 # -----------------------------------------------
-final_h1n1_tune_wkfl <- h1n1_tune_wkfl %>% 
-  finalize_workflow(best_h1n1_dt_model)
+rf_final_h1n1_tune_wkfl <- rf_h1n1_tune_wkfl %>% 
+  finalize_workflow(rf_best_h1n1_dt_model)
 
-final_h1n1_tune_wkfl
+rf_final_h1n1_tune_wkfl
 
 
-final_seas_tune_wkfl <- seas_tune_wkfl %>% 
-  finalize_workflow(best_seas_dt_model)
+rf_final_seas_tune_wkfl <- rf_seas_tune_wkfl %>% 
+  finalize_workflow(rf_best_seas_dt_model)
 
-final_seas_tune_wkfl
+rf_final_seas_tune_wkfl
 
 
 # -----------------------------------------------
 # 14. LAST_FIT ON THE HELD-OUT SPLITS
 # -----------------------------------------------
-h1n1_final_fit <- 
-  final_h1n1_tune_wkfl %>% 
+rf_h1n1_final_fit <- 
+  rf_final_h1n1_tune_wkfl %>% 
   last_fit(split = data_split_h1n1)
 
-seas_final_fit <- 
-  final_seas_tune_wkfl %>% 
+rf_seas_final_fit <- 
+  rf_final_seas_tune_wkfl %>% 
   last_fit(split = data_split_seas)
 
 
@@ -372,8 +372,8 @@ seas_final_fit <-
 # 15. COLLECT METRICS
 # -----------------------------------------------
 
-h1n1_final_fit %>% collect_metrics()
-seas_final_fit  %>% collect_metrics()
+rf_h1n1_final_fit %>% collect_metrics()
+rf_seas_final_fit  %>% collect_metrics()
 
 
 # -----------------------------------------------
@@ -383,28 +383,30 @@ seas_final_fit  %>% collect_metrics()
 #library(ggplot2)
 
 # 1) Pull out predictions (with probabilities)
-h1n1_preds <- h1n1_final_fit %>% collect_predictions()
-seas_preds <- seas_final_fit  %>% collect_predictions()
+rf_h1n1_preds <- rf_h1n1_final_fit %>% 
+  collect_predictions()
+rf_seas_preds <- rf_seas_final_fit  %>%
+  collect_predictions()
 
 # 2) Compute ROC curve data
-roc_h1n1 <- roc_curve(h1n1_preds, truth = h1n1_vaccine, .pred_1)
-roc_seas <- roc_curve(seas_preds, truth = seasonal_vaccine, .pred_1)
+rf_roc_h1n1 <- roc_curve(rf_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+rf_roc_seas <- roc_curve(rf_seas_preds, truth = seasonal_vaccine, .pred_1)
 
 # 3a) Plot separately
-autoplot(roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve")
-autoplot(roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve")
+autoplot(rf_roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve (Random Forest)")
+autoplot(rf_roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve (Random Forest)")
 
 
 # -----------------------------------------------
 # 17. TRAIN FINAL MODELS ON FULL TRAINING DATA
 # -----------------------------------------------
-final_h1n1 <- fit(final_h1n1_tune_wkfl, train_df)
-final_seas <- fit(final_seas_tune_wkfl, train_df)
+rf_final_h1n1 <- fit(rf_final_h1n1_tune_wkfl, train_df)
+rf_final_seas <- fit(rf_final_seas_tune_wkfl, train_df)
 
 
 # Here I am checking for variable importance
-vip::vip(final_h1n1, num_features= 15)
-vip::vip(final_seas,  num_features= 15)
+vip::vip(rf_final_h1n1, num_features= 15)
+vip::vip(rf_final_seas,  num_features= 15)
 
 
 # -----------------------------------------------
@@ -417,9 +419,9 @@ test_df_prepared <- test_df %>%
     seasonal_vaccine = factor(NA, levels = c(1, 0)),
     strata = NA_character_)
 
-test_pred_h1n1_random_forest <- predict(final_h1n1, test_df_prepared, type = "prob") %>% 
+test_pred_h1n1_random_forest <- predict(rf_final_h1n1, test_df_prepared, type = "prob") %>% 
   pull(.pred_1)
-test_pred_seas_random_forest <- predict(final_seas, test_df_prepared, type = "prob") %>% 
+test_pred_seas_random_forest <- predict(rf_final_seas, test_df_prepared, type = "prob") %>% 
   pull(.pred_1)
 
 head(test_pred_h1n1_random_forest)
