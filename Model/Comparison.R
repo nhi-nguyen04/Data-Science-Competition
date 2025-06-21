@@ -58,10 +58,10 @@ xgb_seas_preds <- xgb_seas_preds %>%
 
 
 # Combine predictions (add , xgb_h1n1_preds when done)
-all_preds_h1n1 <- bind_rows(bt_h1n1_preds, rf_h1n1_preds) %>%
+all_preds_h1n1 <- bind_rows(bt_h1n1_preds, rf_h1n1_preds, xgb_h1n1_preds) %>%
   mutate(.pred_class = if_else(.pred_1 > 0.5, "Yes", "No") %>% factor(levels = levels(h1n1_vaccine)))
 
-all_preds_seas <- bind_rows(bt_seas_preds, rf_seas_preds) %>%
+all_preds_seas <- bind_rows(bt_seas_preds, rf_seas_preds, xgb_seas_preds) %>%
   mutate(.pred_class = if_else(.pred_1 > 0.5, "Yes", "No") %>% factor(levels = levels(seasonal_vaccine)))
 
 # 3. Model diagnostics
@@ -146,17 +146,21 @@ autoplot(bt_roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve (Bagged Trees
 autoplot(rf_roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve (Random Forest)")
 autoplot(rf_roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve (Random Forest)")
 
+# XGBoost
+autoplot(xgb_roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve (XGBoost)")
+autoplot(xgb_roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve (XGBoost)")
+
 # Comparing all in one plot
 bt_roc_h1n1$Model <- "Bagged Trees - H1N1"
 bt_roc_seas$Model <- "Bagged Trees - Seasonal"
 rf_roc_h1n1$Model <- "Random Forest - H1N1"
 rf_roc_seas$Model <- "Random Forest - Seasonal"
-# xgb_roc_h1n1$Model <- "XGBoost - H1N1"
-# xgb_roc_seas$Model <- "XGBoost - Seasonal"
+xgb_roc_h1n1$Model <- "XGBoost - H1N1"
+xgb_roc_seas$Model <- "XGBoost - Seasonal"
 
 
-combined_roc_h1n1 <- bind_rows(bt_roc_h1n1, rf_roc_h1n1)
-combined_roc_seas <- bind_rows(bt_roc_seas, rf_roc_seas)
+combined_roc_h1n1 <- bind_rows(bt_roc_h1n1, rf_roc_h1n1, xgb_roc_h1n1)
+combined_roc_seas <- bind_rows(bt_roc_seas, rf_roc_seas, xgb_roc_seas)
 
 ggplot(combined_roc_h1n1, aes(x = 1 - specificity, y = sensitivity, color = Model)) +
   geom_line(size = 1) +
@@ -198,12 +202,20 @@ all_metrics_seas <- bind_rows(bt_metrics_seas, rf_metrics_seas, xgb_metrics_seas
 all_metrics_seas
 
 
-# bt_rs_metrics_h1n1$model <- "Bagged Trees"
-# rf_rs_metrics_h1n1$model <- "Random Forest"
-# xgb_rs_metrics_h1n1$model <- "XGBoost"
-# 
-# bt_rs_metrics_seas$model <- "Bagged Trees"
-# rf_rs_metrics_h1n1$model <- "Random Forest"
-# xgb_rs_metrics_seas$model <- "XGBoost"
+bt_rs_metrics_h1n1$model <- "Bagged Trees"
+rf_rs_metrics_h1n1$model <- "Random Forest"
+xgb_rs_metrics_h1n1$model <- "XGBoost"
 
+bt_rs_metrics_seas$model <- "Bagged Trees"
+rf_rs_metrics_seas$model <- "Random Forest"
+xgb_rs_metrics_seas$model <- "XGBoost"
 
+all_metrics_rs_h1n1 <- bind_rows(bt_rs_metrics_h1n1, rf_rs_metrics_h1n1, xgb_rs_metrics_h1n1)  #%>%
+ # select(.metric, .estimate, model) %>%
+ # pivot_wider(names_from = .metric, values_from = .estimate)
+all_metrics_rs_h1n1
+
+all_metrics_rs_seas <- bind_rows(bt_rs_metrics_seas, rf_rs_metrics_seas, xgb_rs_metrics_seas) #%>%
+ # select(.metric, .estimate, model) %>%
+ # pivot_wider(names_from = .metric, values_from = .estimate)
+all_metrics_rs_seas
