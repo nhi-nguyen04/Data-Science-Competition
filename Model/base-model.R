@@ -68,8 +68,7 @@ log_spec <- logistic_reg(
 # Fixed approach: Use step_rm() to remove unwanted columns
 h1n1_recipe <- recipe(
   h1n1_vaccine ~ .,
-  data = train_data
-) %>%
+  data = train_data) %>%
   update_role(respondent_id, new_role = "ID") %>%
   # Remove the other target (seasonal) if it’s present
   #creates a specification of a recipe step that will remove selected variables.
@@ -87,8 +86,7 @@ h1n1_recipe <- recipe(
 
 seas_recipe <- recipe(
   seasonal_vaccine ~ .,
-  data = train_data
-) %>%
+  data = train_data) %>%
   update_role(respondent_id, new_role = "ID") %>%
   step_rm(h1n1_vaccine) %>%
   step_impute_median(all_numeric_predictors()) %>%
@@ -100,36 +98,36 @@ seas_recipe <- recipe(
 # -----------------------------------------------
 # 6. CREATE WORKFLOWS
 # -----------------------------------------------
-wf_h1n1 <- workflow() %>%
+lr_wf_h1n1 <- workflow() %>%
   add_recipe(h1n1_recipe) %>%
   add_model(log_spec)
 
-wf_seas <- workflow() %>%
+lr_wf_seas <- workflow() %>%
   add_recipe(seas_recipe) %>%
   add_model(log_spec)
 
 # -----------------------------------------------
 # 7. TRAIN & EVALUATE ON SPLIT
 # -----------------------------------------------
-fit_h1n1 <- fit(wf_h1n1, train_data)
-fit_seas <- fit(wf_seas, train_data)
+lr_fit_h1n1 <- fit(lr_wf_h1n1, train_data)
+lr_fit_seas <- fit(lr_wf_seas, train_data)
 
-pred_h1n1 <- predict(fit_h1n1, eval_data, type = "prob") %>% pull(.pred_1)
-pred_seas <- predict(fit_seas, eval_data, type = "prob") %>% pull(.pred_1)
+lr_pred_h1n1 <- predict(lr_fit_h1n1, eval_data, type = "prob") %>% pull(.pred_1)
+lr_pred_seas <- predict(lr_fit_seas, eval_data, type = "prob") %>% pull(.pred_1)
 
 # -----------------------------------------------
 # 8. TRAIN FINAL MODELS ON FULL TRAINING DATA
 # -----------------------------------------------
-final_wf_h1n1 <- workflow() %>%
+lr_final_wf_h1n1 <- workflow() %>%
   add_recipe(h1n1_recipe) %>%
   add_model(log_spec)
 
-final_wf_seas <- workflow() %>%
+lr_final_wf_seas <- workflow() %>%
   add_recipe(seas_recipe) %>%
   add_model(log_spec)
 
-final_h1n1 <- fit(final_wf_h1n1, train_df)
-final_seas <- fit(final_wf_seas, train_df)
+lr_final_h1n1 <- fit(lr_final_wf_h1n1, train_df)
+lr_final_seas <- fit(lr_final_wf_seas, train_df)
 
 # -----------------------------------------------
 # 9. MAKE PREDICTIONS ON TEST DATA
