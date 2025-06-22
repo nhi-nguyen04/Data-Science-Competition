@@ -92,11 +92,11 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
 # -----------------------------------------------
 # 7.WORKFLOWS
 # -----------------------------------------------
-wf_h1n1 <- workflow() %>%
+dt_wf_h1n1 <- workflow() %>%
   add_recipe(h1n1_recipe) %>%
   add_model(model)
 
-wf_seas <- workflow() %>%
+dt_wf_seas <- workflow() %>%
   add_recipe(seas_recipe) %>%
   add_model(model)
 
@@ -106,20 +106,20 @@ wf_seas <- workflow() %>%
 # -----------------------------------------------
 # 8.Train the workflow
 # -----------------------------------------------
-h1n1_dt_wkfl_fit <- wf_h1n1 %>% 
+dt_h1n1_dt_wkfl_fit <- dt_wf_h1n1 %>% 
   last_fit(split = data_split_h1n1)
 
-seas_dt_wkfl_fit <- wf_seas %>% 
+dt_seas_dt_wkfl_fit <- dt_wf_seas %>% 
   last_fit(split = data_split_seas)
 
 
 # -----------------------------------------------
 # 9.Calculate performance metrics on test data
 # -----------------------------------------------
-h1n1_dt_wkfl_fit %>% 
+dt_h1n1_dt_wkfl_fit %>% 
   collect_metrics()
 
-seas_dt_wkfl_fit %>% 
+dt_seas_dt_wkfl_fit %>% 
   collect_metrics()
 
 
@@ -148,42 +148,42 @@ data_metrics <- metric_set(roc_auc, sens, spec)
 
 
 # Fit resamples
-h1n1_dt_rs <- wf_h1n1 %>% 
+dt_h1n1_dt_rs <- dt_wf_h1n1 %>% 
   fit_resamples(resamples = h1n1_folds,
                 metrics = data_metrics)
 
-seasonal_dt_rs <- wf_seas %>% 
+dt_seasonal_dt_rs <- dt_wf_seas %>% 
   fit_resamples(resamples = seasonal_folds,
                 metrics = data_metrics)
 
 
 # View performance metrics
 
-h1n1_dt_rs %>% 
+dt_h1n1_dt_rs %>% 
   collect_metrics()
 
-seasonal_dt_rs %>% 
+dt_seasonal_dt_rs %>% 
   collect_metrics()
 
 
 
 # Detailed cross validation results
-h1n1_dt_rs_results <- h1n1_dt_rs %>% 
+dt_h1n1_dt_rs_results <- dt_h1n1_dt_rs %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore model performance for decision tree
-h1n1_dt_rs_results %>% 
+dt_h1n1_dt_rs_results %>% 
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
             median = median(.estimate),
             max = max(.estimate))
 
 
-seasonal_dt_rs_results <- seasonal_dt_rs %>% 
+dt_seasonal_dt_rs_results <- dt_seasonal_dt_rs %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore model performance for decision tree
-seasonal_dt_rs_results %>% 
+dt_seasonal_dt_rs_results %>% 
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
             median = median(.estimate),
@@ -206,18 +206,18 @@ dt_tune_model
 
 
 # Create a tuning workflow
-h1n1_tune_wkfl <- wf_h1n1 %>% 
+dt_h1n1_tune_wkfl <- dt_wf_h1n1 %>% 
   # Replace model
   update_model(dt_tune_model)
 
-h1n1_tune_wkfl
+dt_h1n1_tune_wkfl
 
 
-seas_tune_wkfl <- wf_seas %>% 
+dt_seas_tune_wkfl <- dt_wf_seas %>% 
   # Replace model
   update_model(dt_tune_model)
 
-seas_tune_wkfl
+dt_seas_tune_wkfl
 
 
 
@@ -230,34 +230,34 @@ dt_grid
 
 
 # Hyperparameter tuning
-h1n1_dt_tuning <- h1n1_tune_wkfl %>% 
+dt_h1n1_dt_tuning <- dt_h1n1_tune_wkfl %>% 
   tune_grid(resamples = h1n1_folds,
             grid = dt_grid,
             metrics = data_metrics)
 
 
-seas_dt_tuning <- seas_tune_wkfl %>% 
+dt_seas_dt_tuning <- dt_seas_tune_wkfl %>% 
   tune_grid(resamples = seasonal_folds,
             grid = dt_grid,
             metrics = data_metrics)
 
 
 # View results
-h1n1_dt_tuning %>% 
+dt_h1n1_dt_tuning %>% 
   collect_metrics()
 
 
 # View results
-seas_dt_tuning %>% 
+dt_seas_dt_tuning %>% 
   collect_metrics()
 
 
 # Collect detailed tuning results
-h1n1_dt_tuning_results <- h1n1_dt_tuning %>% 
+dt_h1n1_dt_tuning_results <- dt_h1n1_dt_tuning %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore detailed ROC AUC results for each fold
-h1n1_dt_tuning_results %>% 
+dt_h1n1_dt_tuning_results %>% 
   filter(.metric == 'roc_auc') %>% 
   group_by(id) %>% 
   summarize(min_roc_auc = min(.estimate),
@@ -266,11 +266,11 @@ h1n1_dt_tuning_results %>%
 
 
 # Collect detailed tuning results
-seas_dt_tuning_results <- seas_dt_tuning %>% 
+dt_seas_dt_tuning_results <- dt_seas_dt_tuning %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore detailed ROC AUC results for each fold
-seas_dt_tuning_results %>% 
+dt_seas_dt_tuning_results %>% 
   filter(.metric == 'roc_auc') %>% 
   group_by(id) %>% 
   summarize(min_roc_auc = min(.estimate),
@@ -283,42 +283,42 @@ seas_dt_tuning_results %>%
 # -----------------------------------------------
 
 # Display 5 best performing models
-h1n1_dt_tuning %>% 
+dt_h1n1_dt_tuning %>% 
   show_best(metric = 'roc_auc', n = 5)
 
-seas_dt_tuning %>% 
+dt_seas_dt_tuning %>% 
   show_best(metric = 'roc_auc', n = 5)
 
 
 
 # Select based on best performance
-best_h1n1_dt_model <- h1n1_dt_tuning %>% 
+dt_best_h1n1_dt_model <- dt_h1n1_dt_tuning %>% 
   # Choose the best model based on roc_auc
   select_best(metric = 'roc_auc')
 
-best_h1n1_dt_model
+dt_best_h1n1_dt_model
 
 
-best_seas_dt_model <- seas_dt_tuning %>% 
+dt_best_seas_dt_model <- dt_seas_dt_tuning %>% 
   # Choose the best model based on roc_auc
   select_best(metric = 'roc_auc')
 
-best_seas_dt_model
+dt_best_seas_dt_model
 
 
 # -----------------------------------------------
 # 13.Finalize your workflow
 # -----------------------------------------------
-final_h1n1_tune_wkfl <- h1n1_tune_wkfl %>% 
-  finalize_workflow(best_h1n1_dt_model)
+dt_final_h1n1_tune_wkfl <- dt_h1n1_tune_wkfl %>% 
+  finalize_workflow(dt_best_h1n1_dt_model)
 
-final_h1n1_tune_wkfl
+dt_final_h1n1_tune_wkfl
 
 
-final_seas_tune_wkfl <- seas_tune_wkfl %>% 
-  finalize_workflow(best_seas_dt_model)
+dt_final_seas_tune_wkfl <- dt_seas_tune_wkfl %>% 
+  finalize_workflow(dt_best_seas_dt_model)
 
-final_seas_tune_wkfl
+dt_final_seas_tune_wkfl
 
 
 # -----------------------------------------------
@@ -326,8 +326,8 @@ final_seas_tune_wkfl
 # -----------------------------------------------
 
 
-final_h1n1 <- fit(final_h1n1_tune_wkfl, train_df)
-final_seas <- fit(final_seas_tune_wkfl, train_df)
+dt_final_h1n1 <- fit(dt_final_h1n1_tune_wkfl, train_df)
+dt_final_seas <- fit(dt_final_seas_tune_wkfl, train_df)
 
 
 # -----------------------------------------------
@@ -342,8 +342,8 @@ test_df_prepared <- test_df %>%
   )
 skim(test_df_prepared)
 
-test_pred_h1n1_decision_tree <- predict(final_h1n1, test_df_prepared, type = "prob") %>% pull(.pred_1)
-test_pred_seas_decision_tree <- predict(final_seas, test_df_prepared, type = "prob") %>% pull(.pred_1)
+test_pred_h1n1_decision_tree <- predict(dt_final_h1n1, test_df_prepared, type = "prob") %>% pull(.pred_1)
+test_pred_seas_decision_tree <- predict(dt_final_seas, test_df_prepared, type = "prob") %>% pull(.pred_1)
 
 head(test_pred_h1n1_decision_tree)
 head(test_pred_seas_decision_tree)

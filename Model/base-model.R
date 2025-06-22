@@ -140,8 +140,8 @@ test_df_prepared <- test_df %>%
     strata = NA_character_
   )
 
-test_pred_h1n1_log_reg <- predict(final_h1n1, test_df_prepared, type = "prob") %>% pull(.pred_1)
-test_pred_seas_log_reg <- predict(final_seas, test_df_prepared, type = "prob") %>% pull(.pred_1)
+test_pred_h1n1_log_reg <- predict(lr_final_h1n1, test_df_prepared, type = "prob") %>% pull(.pred_1)
+test_pred_seas_log_reg <- predict(lr_final_seas, test_df_prepared, type = "prob") %>% pull(.pred_1)
 
 head(test_pred_h1n1_log_reg)
 head(test_pred_seas_log_reg)

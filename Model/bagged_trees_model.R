@@ -362,9 +362,9 @@ test_df_prepared <- test_df %>%
     strata = NA_character_
   )
 
-test_pred_h1n1_bagged_tree <- predict(final_h1n1, test_df_prepared, type = "prob") %>% 
+test_pred_h1n1_bagged_tree <- predict(bt_final_h1n1, test_df_prepared, type = "prob") %>% 
   pull(.pred_1)
-test_pred_seas_bagged_tree <- predict(final_seas, test_df_prepared, type = "prob") %>% 
+test_pred_seas_bagged_tree <- predict(bt_final_seas, test_df_prepared, type = "prob") %>% 
   pull(.pred_1)
 
 head(test_pred_h1n1_bagged_tree)
