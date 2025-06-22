@@ -4,7 +4,7 @@ library(vip)
 library(probably)
 library(car)
 library(ggplot2)
-library(rms)
+library(probably)
 
 # 1. Update recipe with interaction terms for logistic regression
 # Create Interaction Terms using domain knowledge via formula
@@ -66,7 +66,43 @@ all_preds_seas <- bind_rows(bt_seas_preds, rf_seas_preds, xgb_seas_preds) %>%
 
 # 3. Model diagnostics
 
-## 3.1 Variable Importance in model code
+## 3.1 Lift Charts
+# H1N1 lift curves
+lift_h1n1_bt <- lift_curve(bt_h1n1_preds, truth = h1n1_vaccine, .pred_1) %>%
+  mutate(Model = "Bagged Trees - H1N1")
+lift_h1n1_rf <- lift_curve(rf_h1n1_preds, truth = h1n1_vaccine, .pred_1) %>%
+  mutate(Model = "Random Forest - H1N1")
+lift_h1n1_xgb <- lift_curve(xgb_h1n1_preds, truth = h1n1_vaccine, .pred_1) %>%
+  mutate(Model = "XGBoost - H1N1")
+
+# Seasonal lift curves
+lift_seas_bt <- lift_curve(bt_seas_preds, truth = seasonal_vaccine, .pred_1) %>%
+  mutate(Model = "Bagged Trees - Seasonal")
+lift_seas_rf <- lift_curve(rf_seas_preds, truth = seasonal_vaccine, .pred_1) %>%
+  mutate(Model = "Random Forest - Seasonal")
+lift_seas_xgb <- lift_curve(xgb_seas_preds, truth = seasonal_vaccine, .pred_1) %>%
+  mutate(Model = "XGBoost - Seasonal")
+
+# Combine
+combined_lift_h1n1 <- bind_rows(lift_h1n1_bt, lift_h1n1_rf, lift_h1n1_xgb)
+combined_lift_seas <- bind_rows(lift_seas_bt, lift_seas_rf, lift_seas_xgb)
+
+# Plot
+ggplot(combined_lift_h1n1, aes(x = .percent_tested, y = .lift, color = Model)) +
+  geom_line(size = 1) +
+  labs(
+    title = "Lift Chart - H1N1 Vaccine Models",
+    x = "% Samples Tested",
+    y = "Lift") +
+  theme_minimal()
+
+ggplot(combined_lift_seas, aes(x = .percent_tested, y = .lift, color = Model)) +
+  geom_line(size = 1) +
+  labs(
+    title = "Lift Chart - Seasonal Vaccine Models",
+    x = "% Samples Tested",
+    y = "Lift") +
+  theme_minimal()
 
 ## 3.2 Calibration plots
 # bt_h1n1_preds %>%
@@ -111,33 +147,36 @@ rf_conf_seas  <- conf_mat(rf_seas_preds,  truth = seasonal_vaccine, estimate = .
 xgb_conf_seas <- conf_mat(xgb_seas_preds, truth = seasonal_vaccine, estimate = .pred_class)
 
 ## 3.5 Gain curves
-gain_curve(bt_h1n1_preds, truth = h1n1_vaccine, .pred_1) %>% 
-  autoplot() + 
-  ggtitle("Gain Curve - Bagged Trees")
+gain_h1n1_bt  <- gain_curve(bt_h1n1_preds, truth = h1n1_vaccine, .pred_1) %>% 
+  mutate(Model = "Bagged Trees")
+gain_h1n1_rf  <- gain_curve(rf_h1n1_preds, truth = h1n1_vaccine, .pred_1) %>%
+  mutate(Model = "Random Forest")
+gain_h1n1_xgb <- gain_curve(xgb_h1n1_preds, truth = h1n1_vaccine, .pred_1) %>%
+  mutate(Model = "XGBoost")
 
-gain_curve(rf_h1n1_preds, truth = h1n1_vaccine, .pred_1) %>% 
-  autoplot() + 
-  ggtitle("Gain Curve - Random Forest")
+gain_combined_h1n1 <- bind_rows(gain_h1n1_bt, gain_h1n1_rf, gain_h1n1_xgb)
 
-gain_curve(xgb_h1n1_preds, truth = h1n1_vaccine, .pred_1) %>% 
-  autoplot() + 
-  ggtitle("Gain Curve - XGBoost")
+ggplot(gain_combined_h1n1, aes(x = .percent_tested, y = .percent_found, color = Model)) +
+  geom_line(size = 1) +
+  labs(title = "Gain Curve: H1N1 Vaccine Models", x = "% Samples Tested", y = "% Positives Found") +
+  theme_minimal()
+
+gain_seas_bt  <- gain_curve(bt_seas_preds, truth = seasonal_vaccine, .pred_1) %>%
+  mutate(Model = "Bagged Trees")
+gain_seas_rf  <- gain_curve(rf_seas_preds, truth = seasonal_vaccine, .pred_1) %>% 
+  mutate(Model = "Random Forest")
+gain_seas_xgb <- gain_curve(xgb_seas_preds, truth = seasonal_vaccine, .pred_1) %>%
+  mutate(Model = "XGBoost")
+
+gain_combined_seas <- bind_rows(gain_seas_bt, gain_seas_rf, gain_seas_xgb)
+
+ggplot(gain_combined_seas, aes(x = .percent_tested, y = .percent_found, color = Model)) +
+  geom_line(size = 1) +
+  labs(title = "Gain Curve: Seasonal Vaccine Models", x = "% Samples Tested", y = "% Positives Found") +
+  theme_minimal()
 
 
-gain_curve(bt_seas_preds, truth = seasonal_vaccine, .pred_1) %>% 
-  autoplot() + 
-  ggtitle("Gain Curve - Bagged Trees")
-
-gain_curve(rf_seas_preds, truth = seasonal_vaccine, .pred_1) %>% 
-  autoplot() + 
-  ggtitle("Gain Curve - Random Forest")
-
-gain_curve(xgb_seas_preds, truth = seasonal_vaccine, .pred_1) %>% 
-  autoplot() + 
-  ggtitle("Gain Curve - XGBoost")
-
-
-######### ROC
+######### ROC and Precision-Recall
 # Bagged Trees
 autoplot(bt_roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve (Bagged Trees)")
 autoplot(bt_roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve (Bagged Trees)")
@@ -180,6 +219,36 @@ ggplot(combined_roc_seas, aes(x = 1 - specificity, y = sensitivity, color = Mode
     x = "1 - Specificity (False Positive Rate)",
     y = "Sensitivity (True Positive Rate)"
   ) +
+  theme_minimal()
+
+
+# Precision-Recall
+pr_h1n1_bt  <- pr_curve(bt_h1n1_preds, truth = h1n1_vaccine, .pred_1) %>% 
+  mutate(Model = "Bagged Trees")
+pr_h1n1_rf  <- pr_curve(rf_h1n1_preds, truth = h1n1_vaccine, .pred_1) %>%
+  mutate(Model = "Random Forest")
+pr_h1n1_xgb <- pr_curve(xgb_h1n1_preds, truth = h1n1_vaccine, .pred_1) %>%
+  mutate(Model = "XGBoost")
+
+combined_pr_h1n1 <- bind_rows(pr_h1n1_bt, pr_h1n1_rf, pr_h1n1_xgb)
+
+ggplot(combined_pr_h1n1, aes(x = recall, y = precision, color = Model)) +
+  geom_line(size = 1) +
+  labs(title = "Precision-Recall Curve: H1N1 Vaccine Models", x = "Recall", y = "Precision") +
+  theme_minimal()
+
+pr_seas_bt  <- pr_curve(bt_seas_preds, truth = seasonal_vaccine, .pred_1) %>% 
+  mutate(Model = "Bagged Trees")
+pr_seas_rf  <- pr_curve(rf_seas_preds, truth = seasonal_vaccine, .pred_1) %>% 
+  mutate(Model = "Random Forest")
+pr_seas_xgb <- pr_curve(xgb_seas_preds, truth = seasonal_vaccine, .pred_1) %>% 
+  mutate(Model = "XGBoost")
+
+combined_pr_seas <- bind_rows(pr_seas_bt, pr_seas_rf, pr_seas_xgb)
+
+ggplot(combined_pr_seas, aes(x = recall, y = precision, color = Model)) +
+  geom_line(size = 1) +
+  labs(title = "Precision-Recall Curve: Seasonal Vaccine Models", x = "Recall", y = "Precision") +
   theme_minimal()
 
 ## 3.6 Performance metrics
