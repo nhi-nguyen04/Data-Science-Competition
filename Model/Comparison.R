@@ -94,6 +94,7 @@ ggplot(combined_lift_h1n1, aes(x = .percent_tested, y = .lift, color = Model)) +
     title = "Lift Chart - H1N1 Vaccine Models",
     x = "% Samples Tested",
     y = "Lift") +
+  scale_color_manual(values=c("#94C76E", "#AF6EC7", "#6EBCC7")) + 
   theme_minimal()
 
 ggplot(combined_lift_seas, aes(x = .percent_tested, y = .lift, color = Model)) +
@@ -102,6 +103,7 @@ ggplot(combined_lift_seas, aes(x = .percent_tested, y = .lift, color = Model)) +
     title = "Lift Chart - Seasonal Vaccine Models",
     x = "% Samples Tested",
     y = "Lift") +
+  scale_color_manual(values=c("#94C76E", "#AF6EC7", "#6EBCC7")) +
   theme_minimal()
 
 ## 3.2 Calibration plots
@@ -159,6 +161,7 @@ gain_combined_h1n1 <- bind_rows(gain_h1n1_bt, gain_h1n1_rf, gain_h1n1_xgb)
 ggplot(gain_combined_h1n1, aes(x = .percent_tested, y = .percent_found, color = Model)) +
   geom_line(size = 1) +
   labs(title = "Gain Curve: H1N1 Vaccine Models", x = "% Samples Tested", y = "% Positives Found") +
+  scale_color_manual(values=c("#94C76E", "#AF6EC7", "#6EBCC7")) +
   theme_minimal()
 
 gain_seas_bt  <- gain_curve(bt_seas_preds, truth = seasonal_vaccine, .pred_1) %>%
@@ -173,6 +176,7 @@ gain_combined_seas <- bind_rows(gain_seas_bt, gain_seas_rf, gain_seas_xgb)
 ggplot(gain_combined_seas, aes(x = .percent_tested, y = .percent_found, color = Model)) +
   geom_line(size = 1) +
   labs(title = "Gain Curve: Seasonal Vaccine Models", x = "% Samples Tested", y = "% Positives Found") +
+  scale_color_manual(values=c("#94C76E", "#AF6EC7", "#6EBCC7")) +
   theme_minimal()
 
 
@@ -207,8 +211,8 @@ ggplot(combined_roc_h1n1, aes(x = 1 - specificity, y = sensitivity, color = Mode
   labs(
     title = "ROC Curves for H1N1 Vaccine Models",
     x = "1 - Specificity (False Positive Rate)",
-    y = "Sensitivity (True Positive Rate)"
-  ) +
+    y = "Sensitivity (True Positive Rate)") +
+  scale_color_manual(values=c("#94C76E", "#AF6EC7", "#6EBCC7")) +
   theme_minimal()
 
 ggplot(combined_roc_seas, aes(x = 1 - specificity, y = sensitivity, color = Model)) +
@@ -217,8 +221,8 @@ ggplot(combined_roc_seas, aes(x = 1 - specificity, y = sensitivity, color = Mode
   labs(
     title = "ROC Curves for Seasonal Vaccine Models",
     x = "1 - Specificity (False Positive Rate)",
-    y = "Sensitivity (True Positive Rate)"
-  ) +
+    y = "Sensitivity (True Positive Rate)") +
+  scale_color_manual(values=c("#94C76E", "#AF6EC7", "#6EBCC7")) +
   theme_minimal()
 
 
@@ -235,6 +239,7 @@ combined_pr_h1n1 <- bind_rows(pr_h1n1_bt, pr_h1n1_rf, pr_h1n1_xgb)
 ggplot(combined_pr_h1n1, aes(x = recall, y = precision, color = Model)) +
   geom_line(size = 1) +
   labs(title = "Precision-Recall Curve: H1N1 Vaccine Models", x = "Recall", y = "Precision") +
+  scale_color_manual(values=c("#94C76E", "#AF6EC7", "#6EBCC7")) +
   theme_minimal()
 
 pr_seas_bt  <- pr_curve(bt_seas_preds, truth = seasonal_vaccine, .pred_1) %>% 
@@ -249,6 +254,7 @@ combined_pr_seas <- bind_rows(pr_seas_bt, pr_seas_rf, pr_seas_xgb)
 ggplot(combined_pr_seas, aes(x = recall, y = precision, color = Model)) +
   geom_line(size = 1) +
   labs(title = "Precision-Recall Curve: Seasonal Vaccine Models", x = "Recall", y = "Precision") +
+  scale_color_manual(values=c("#94C76E", "#AF6EC7", "#6EBCC7")) +
   theme_minimal()
 
 ## 3.6 Performance metrics
@@ -288,3 +294,16 @@ all_metrics_rs_seas <- bind_rows(bt_rs_metrics_seas, rf_rs_metrics_seas, xgb_rs_
  # select(.metric, .estimate, model) %>%
  # pivot_wider(names_from = .metric, values_from = .estimate)
 all_metrics_rs_seas
+
+# 3.7 Variable Importance Plots
+
+vip::vip(rf_final_h1n1, num_features= 15) +
+  ggtitle("Variable Importance Plot - H1N1 (Random Forest)")
+vip::vip(rf_final_seas,  num_features= 15) +
+  ggtitle("Variable Importance Plot - Seasonal (Random Forest)")
+
+vip::vip(xgb_final_h1n1, num_features= 15) +
+  ggtitle("Variable Importance Plot - H1N1 (XGBoost)")
+vip::vip(xgb_final_seas,  num_features= 15) +
+  ggtitle("Variable Importance Plot - Seasonal (XGBoost)")
+
