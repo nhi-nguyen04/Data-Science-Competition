@@ -10,6 +10,7 @@ library(baguette)
 library(tune)
 library(future)
 library(vip) # for variable importance
+library(skimr)
 set.seed(6)
 
 
@@ -21,7 +22,9 @@ train_labels   <- read_csv("Data/training_set_labels.csv")
 train_df       <- left_join(train_features, train_labels, by = "respondent_id")
 test_df        <- read_csv("Data/test_set_features.csv")
 
-
+glimpse(train_df)
+skim(train_df)
+#View(train_df)
 # -----------------------------------------------
 # 3. DATA PREPARATION 
 # -----------------------------------------------
@@ -46,15 +49,19 @@ categorical_vars <- setdiff(categorical_vars, c("respondent_id", "h1n1_vaccine",
 
 
 # -----------------------------------------------
-# 4. CREATE TWO SEPARATE SPLITS (ONE PER TARGET)
+# 4. CREATE TWO SEPARATE SPLITS (ONE PER TARGET)---> Avoids class imbalance
 # -----------------------------------------------
+#Ensures random split with similar distribution of the outcome variable 
 data_split_h1n1 <- initial_split(train_df, prop = 0.8, strata = h1n1_vaccine)
-train_data_h1n1 <- training(data_split_h1n1)
-eval_data_h1n1  <- testing(data_split_h1n1)
+#train_data_h1n1 <- training(data_split_h1n1)
+#eval_data_h1n1  <- testing(data_split_h1n1)
 
 data_split_seas <- initial_split(train_df, prop = 0.8, strata = seasonal_vaccine)
-train_data_seas <- training(data_split_seas)
-eval_data_seas  <- testing(data_split_seas)
+#train_data_seas <- training(data_split_seas)
+#eval_data_seas  <- testing(data_split_seas)
+
+
+
 
 
 # -----------------------------------------------
@@ -82,8 +89,11 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   # <- drops any predictors that have zero variance
   step_zv(all_predictors()) %>% 
   # Normalize numeric columns
-  step_normalize(all_numeric_predictors())
+  step_normalize(all_numeric_predictors()) # this migth be wrong???????????????????
 
+#the types collum migth show a problem
+h1n1_recipe%>%
+  summary()
 tidy(h1n1_recipe, number = 4)
 
 
@@ -111,8 +121,10 @@ rf_wf_seas <- workflow() %>%
 
 
 # -----------------------------------------------
-# 8.Train the workflow
+# 8.Train the workflow --> A lot goes behind the scene here
 # -----------------------------------------------
+#Here Training and test dataset are created
+#recipe trained and applied
 rf_h1n1_dt_wkfl_fit <- rf_wf_h1n1 %>% 
   last_fit(split = data_split_h1n1)
 
@@ -120,8 +132,9 @@ rf_seas_dt_wkfl_fit <- rf_wf_seas %>%
   last_fit(split = data_split_seas)
 
 # -----------------------------------------------
-# 9.Calculate performance metrics on test data
+# 9.Model Evaluation -->Calculate performance metrics on test data(20% of the trainning data)
 # -----------------------------------------------
+#predictions and metrics are generated with test dataset
 rf_metrics_h1n1 <- rf_h1n1_dt_wkfl_fit %>% 
   collect_metrics()
 
@@ -136,16 +149,47 @@ rf_seas_preds <- collect_predictions(rf_seas_dt_wkfl_fit)
 rf_roc_h1n1 <- roc_curve(rf_h1n1_preds, truth = h1n1_vaccine, .pred_1)
 rf_roc_seas <- roc_curve(rf_seas_preds, truth = seasonal_vaccine, .pred_1)
 
-# 3a. Plot separately
+# 2a. Plot separately  ROC curves
 autoplot(rf_roc_h1n1) + 
   ggtitle("H1N1 Vaccine ROC Curve")
 
 autoplot(rf_roc_seas) + 
   ggtitle("Seasonal Vaccine ROC Curve")
 
+#2b.Calcualte the ROC AUC VALUES
+roc_auc(rf_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+
+roc_auc(rf_seas_preds, truth = seasonal_vaccine, .pred_1)
+
+
+#confusion matrix
+
+# Compute confusion matrix with Heatmap for counts
+ rf_h1n1_preds %>%
+  conf_mat(truth = h1n1_vaccine, estimate = .pred_class) %>%
+  autoplot(type = "heatmap")
+
+rf_seas_preds %>%
+  conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
+  autoplot(type = "heatmap")
+
+# Compute confusion matrix with mosaic plots for visualization of sensitivity and specitivity
+rf_h1n1_preds %>%
+  conf_mat(truth = h1n1_vaccine, estimate = .pred_class) %>%
+  autoplot(type = "mosaic")
+
+rf_seas_preds %>%
+  conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
+  autoplot(type = "mosaic")
+
+#custom metric predictions 
+custom_metrics <- metric_set(accuracy,sens,spec,roc_auc)
+
+custom_metrics(rf_h1n1_preds,truth = h1n1_vaccine, estimate = .pred_class,.pred_1)
+custom_metrics(rf_seas_preds,truth = seasonal_vaccine, estimate = .pred_class,.pred_1)
 
 # -----------------------------------------------
-# 10.Cross Validation
+# 10.Cross Validation--> Estimating performance with CV
 # -----------------------------------------------
 #Cross-validation gives you a more robust estimate of your out-of-sample performance without 
 #the statistical pitfalls - it assesses your model more profoundly.
@@ -168,7 +212,7 @@ seasonal_folds <- vfold_cv(train_data_seas,
 seasonal_folds
 
 # Create custom metrics function
-data_metrics <- metric_set(roc_auc, sens, spec)
+data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 
 # Fit resamples
@@ -205,7 +249,8 @@ rf_h1n1_dt_rs_results %>%
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
             median = median(.estimate),
-            max = max(.estimate))
+            max = max(.estimate),
+            sd = sd(.estimate))
 
 
 rf_seasonal_dt_rs_results <- rf_seasonal_dt_rs %>% 
@@ -216,8 +261,21 @@ rf_seasonal_dt_rs_results %>%
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
             median = median(.estimate),
-            max = max(.estimate))
+            max = max(.estimate),
+            sd = sd(.estimate))
 
+#For H1N1  Flu Vaccine
+#We have used cross validation to evaluate the performance of your random forest  workflow. 
+#Across the 10 cross validation folds, the average area under the ROC curve was ... . 
+#The average sensitivity and specificity were ... and ..., respectively.
+
+#For  Seasonal Flu Vaccine
+#We have used cross validation to evaluate the performance of your random forest  workflow. 
+#Across the 10 cross validation folds, the average area under the ROC curve was ... . 
+#The average sensitivity and specificity were ... and ..., respectively.
+
+
+#Use this to compare against other model types
 
 # -----------------------------------------------
 # 11.Hyperparameter tuning
@@ -278,7 +336,6 @@ rf_seas_dt_tuning <- rf_seas_tune_wkfl %>%
             grid = rf_seas_grid,
             metrics = data_metrics)
 
-
 # View results
 rf_h1n1_dt_tuning %>% 
   collect_metrics()
@@ -300,7 +357,6 @@ rf_h1n1_dt_tuning_results %>%
   summarize(min_roc_auc = min(.estimate),
             median_roc_auc = median(.estimate),
             max_roc_auc = max(.estimate))
-
 
 # Collect detailed tuning results
 rf_seas_dt_tuning_results <- rf_seas_dt_tuning %>% 
@@ -359,6 +415,9 @@ rf_final_seas_tune_wkfl
 # -----------------------------------------------
 # 14. LAST_FIT ON THE HELD-OUT SPLITS
 # -----------------------------------------------
+#Here Training and test dataset are created
+#recipe trained and applied
+#Tune random forest trained with entire training dataset
 rf_h1n1_final_fit <- 
   rf_final_h1n1_tune_wkfl %>% 
   last_fit(split = data_split_h1n1)
@@ -371,9 +430,11 @@ rf_seas_final_fit <-
 #-----------------------------------------------
 # 15. COLLECT METRICS
 # -----------------------------------------------
-
+#predictions and metrics are generated with test dataset
 rf_h1n1_final_fit %>% collect_metrics()
 rf_seas_final_fit  %>% collect_metrics()
+
+#If section 15 and 11(last part) have similar scores it mean the modle will perform similarly in new datasets
 
 
 # -----------------------------------------------
@@ -383,18 +444,18 @@ rf_seas_final_fit  %>% collect_metrics()
 #library(ggplot2)
 
 # 1) Pull out predictions (with probabilities)
-rf_h1n1_preds <- rf_h1n1_final_fit %>% 
+rf_aftr_tunning_h1n1_preds <- rf_h1n1_final_fit %>% 
   collect_predictions()
-rf_seas_preds <- rf_seas_final_fit  %>%
+rf_aftr_tunning_seas_preds <- rf_seas_final_fit  %>%
   collect_predictions()
 
 # 2) Compute ROC curve data
-rf_roc_h1n1 <- roc_curve(rf_h1n1_preds, truth = h1n1_vaccine, .pred_1)
-rf_roc_seas <- roc_curve(rf_seas_preds, truth = seasonal_vaccine, .pred_1)
+rf_aftr_tunning_roc_h1n1 <- roc_curve(rf_aftr_tunning_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+rf_aftr_tunning_roc_seas <- roc_curve(rf_aftr_tunning_seas_preds, truth = seasonal_vaccine, .pred_1)
 
 # 3a) Plot separately
-autoplot(rf_roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve (Random Forest)")
-autoplot(rf_roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve (Random Forest)")
+autoplot(rf_aftr_tunning_roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve (Random Forest)")
+autoplot(rf_aftr_tunning_roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve (Random Forest)")
 
 
 # -----------------------------------------------
