@@ -217,7 +217,7 @@ xgb_h1n1_dt_rs_results %>%
             max = max(.estimate))
 
 
-xgb_seasonal_dt_rs_results <- seasonal_dt_rs %>% 
+xgb_seasonal_dt_rs_results <- xgb_seasonal_dt_rs %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore model performance for xgboost
