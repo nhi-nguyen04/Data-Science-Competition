@@ -4,8 +4,11 @@
 library(tidyverse)
 library(tidymodels)
 library(baguette)
+library(tune)
+library(future)
+library(vip) # for variable importance
+library(skimr)
 set.seed(6)
-
 
 # -----------------------------------------------
 # 2. LOAD DATA
@@ -31,10 +34,8 @@ train_df <- train_df %>%
 # For example: if 'age_group' was stored as integer 1:4 representing bins, do:
 # train_df <- train_df %>% mutate(age_group = factor(age_group))
 # After that, let tidymodels detect which are numeric vs. nominal:
-numeric_vars     <- train_df %>% 
-  select(where(is.numeric)) %>% names()
-categorical_vars <- train_df %>% 
-  select(where(is.character), where(is.factor)) %>% names()
+numeric_vars     <- train_df %>% select(where(is.numeric))    %>% names()
+categorical_vars <- train_df %>% select(where(is.character), where(is.factor)) %>% names()
 
 # Remove the target + ID from those lists
 numeric_vars     <- setdiff(numeric_vars,    c("respondent_id"))
@@ -44,6 +45,7 @@ categorical_vars <- setdiff(categorical_vars, c("respondent_id", "h1n1_vaccine",
 # -----------------------------------------------
 # 4. CREATE TWO SEPARATE SPLITS (ONE PER TARGET)
 # -----------------------------------------------
+#Ensures random split with similar distribution of the outcome variable 
 data_split_h1n1 <- initial_split(train_df, prop = 0.8, strata = h1n1_vaccine)
 train_data_h1n1 <- training(data_split_h1n1)
 eval_data_h1n1  <- testing(data_split_h1n1)
@@ -51,7 +53,6 @@ eval_data_h1n1  <- testing(data_split_h1n1)
 data_split_seas <- initial_split(train_df, prop = 0.8, strata = seasonal_vaccine)
 train_data_seas <- training(data_split_seas)
 eval_data_seas  <- testing(data_split_seas)
-
 
 # -----------------------------------------------
 # 5. SPECIFY BASE MODEL (RPART TREE)
@@ -67,7 +68,7 @@ bt_model <- bag_tree() %>%
 h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   update_role(respondent_id, new_role = "ID") %>%
   # Remove the other target (seasonal) if it’s present
-  # creates a specification of a recipe step that will remove selected variables.
+  #creates a specification of a recipe step that will remove selected variables.
   step_rm(seasonal_vaccine) %>%
   # Impute all numeric predictors by median:
   step_impute_median(all_numeric_predictors()) %>%
@@ -78,7 +79,10 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   # <- drops any predictors that have zero variance
   step_zv(all_predictors()) %>% 
   # Normalize numeric columns
-  step_normalize(all_numeric_predictors())
+  step_normalize(all_numeric_predictors()) # this migth be wrong???????????????????
+
+
+
 
 seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   update_role(respondent_id, new_role = "ID") %>%
@@ -88,6 +92,8 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   step_dummy(all_nominal_predictors()) %>%
   step_zv(all_predictors()) %>% 
   step_normalize(all_numeric_predictors())
+
+tidy(seas_recipe, number = 4)
 
 
 # -----------------------------------------------
@@ -114,7 +120,7 @@ bt_seas_dt_wkfl_fit <- bt_wf_seas %>%
 
 
 # -----------------------------------------------
-# 9.Calculate performance metrics on test data
+# 9.Model Evaluation -->Calculate performance metrics on test data(20% of the trainning data)
 # -----------------------------------------------
 bt_metrics_h1n1 <- bt_h1n1_dt_wkfl_fit %>% 
   collect_metrics()
@@ -123,13 +129,67 @@ bt_metrics_seas <- bt_seas_dt_wkfl_fit %>%
   collect_metrics()
 
 
+# 1. Pull out predictions (with class‐probabilities)
+bt_h1n1_preds <- collect_predictions(bt_h1n1_dt_wkfl_fit)
+bt_seas_preds <- collect_predictions(bt_seas_dt_wkfl_fit)
+
+# 2. Compute ROC curve data
+bt_roc_h1n1 <- roc_curve(bt_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+bt_roc_seas <- roc_curve(bt_seas_preds, truth = seasonal_vaccine, .pred_1)
+
+
+# 2a. Plot separately  ROC curves
+autoplot(bt_roc_h1n1) + 
+  ggtitle("H1N1 Vaccine ROC Curve")
+
+autoplot(bt_roc_seas) + 
+  ggtitle("Seasonal Vaccine ROC Curve")
+
+#2b.Calcualte the ROC AUC VALUES
+roc_auc(bt_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+
+roc_auc(bt_seas_preds, truth = seasonal_vaccine, .pred_1)
+
+#confusion matrix
+
+# Compute confusion matrix with Heatmap for counts
+bt_h1n1_preds %>%
+  conf_mat(truth = h1n1_vaccine, estimate = .pred_class) %>%
+  autoplot(type = "heatmap")
+
+bt_seas_preds %>%
+  conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
+  autoplot(type = "heatmap")
+
+
+# Compute confusion matrix with mosaic plots for visualization of sensitivity and specitivity
+bt_h1n1_preds %>%
+  conf_mat(truth = h1n1_vaccine, estimate = .pred_class) %>%
+  autoplot(type = "mosaic")
+
+bt_seas_preds %>%
+  conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
+  autoplot(type = "mosaic")
+
+
+#custom metric predictions 
+custom_metrics <- metric_set(accuracy,sens,spec,roc_auc)
+
+custom_metrics(bt_h1n1_preds,truth = h1n1_vaccine, estimate = .pred_class,.pred_1)
+custom_metrics(bt_seas_preds,truth = seasonal_vaccine, estimate = .pred_class,.pred_1)
+
+
 # -----------------------------------------------
 # 10.Cross Validation
 # -----------------------------------------------
 # Cross-validation gives you a more robust estimate of your out-of-sample performance without 
 # the statistical pitfalls - it assesses your model more profoundly.
 
+#For speed
+plan(multisession, workers = 4) 
+
 set.seed(290)
+
 h1n1_folds <- vfold_cv(train_data_h1n1, 
                        v = 10,
                        strata = h1n1_vaccine)
@@ -144,7 +204,7 @@ seasonal_folds <- vfold_cv(train_data_seas,
 seasonal_folds
 
 # Create custom metrics function
-data_metrics <- metric_set(roc_auc, sens, spec)
+data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 
 # Fit resamples
@@ -219,24 +279,34 @@ bt_seas_tune_wkfl <- bt_wf_seas %>%
 bt_seas_tune_wkfl
 
 
+
+# Finalize parameter ranges for both
+bt_h1n1_params  <- finalize(parameters(bt_dt_tune_model), train_data_h1n1)
+bt_seas_params  <- finalize(parameters(bt_dt_tune_model), train_data_seas)
+
+
 # Hyperparameter tuning with grid search
 set.seed(214)
-bt_dt_grid <- grid_random(parameters(bt_dt_tune_model),
-                       size = 5)
+# For speed
+plan(multisession, workers = 4) 
 
-bt_dt_grid
 
+set.seed(214)
+bt_h1n1_grid <- grid_random(bt_h1n1_params, size = 10)
+
+set.seed(215)
+bt_seas_grid <- grid_random(bt_seas_params, size = 10)
 
 # Hyperparameter tuning
 bt_h1n1_dt_tuning <- bt_h1n1_tune_wkfl %>% 
   tune_grid(resamples = h1n1_folds,
-            grid = bt_dt_grid,
+            grid = bt_h1n1_grid,
             metrics = data_metrics)
 
 
 bt_seas_dt_tuning <- bt_seas_tune_wkfl %>% 
   tune_grid(resamples = seasonal_folds,
-            grid = bt_dt_grid,
+            grid = bt_seas_grid,
             metrics = data_metrics)
 
 
@@ -322,45 +392,63 @@ bt_final_seas_tune_wkfl
 
 
 # -----------------------------------------------
-# 14. TRAIN FINAL MODELS ON FULL TRAINING DATA
+# 14. LAST_FIT ON THE HELD-OUT SPLITS
+# -----------------------------------------------
+#Here Training and test dataset are created
+#recipe trained and applied
+#Tune random forest trained with entire training dataset
+bt_h1n1_final_fit <- 
+  bt_final_h1n1_tune_wkfl %>% 
+  last_fit(split = data_split_h1n1)
+
+bt_seas_final_fit <- 
+  bt_final_seas_tune_wkfl %>% 
+  last_fit(split = data_split_seas)
+#-----------------------------------------------
+# 15. COLLECT METRICS
+# -----------------------------------------------
+#predictions and metrics are generated with test dataset
+bt_h1n1_final_fit %>% collect_metrics()
+bt_seas_final_fit  %>% collect_metrics()
+
+# -----------------------------------------------
+# 16. ROC CURVE VISUALIZATION (via last_fit results)
+# -----------------------------------------------
+#library(yardstick)
+#library(ggplot2)
+
+# 1) Pull out predictions (with probabilities)
+bt_aftr_tunning_h1n1_preds <- bt_h1n1_final_fit %>% 
+  collect_predictions()
+bt_aftr_tunning_seas_preds <- bt_seas_final_fit  %>%
+  collect_predictions()
+
+# 2) Compute ROC curve data
+bt_aftr_tunning_roc_h1n1 <- roc_curve(bt_aftr_tunning_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+bt_aftr_tunning_roc_seas <- roc_curve(bt_aftr_tunning_seas_preds, truth = seasonal_vaccine, .pred_1)
+
+# 3a) Plot separately
+autoplot(bt_aftr_tunning_roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve (Random Forest)")
+autoplot(bt_aftr_tunning_roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve (Random Forest)")
+
+
+# -----------------------------------------------
+# 17. TRAIN FINAL MODELS ON FULL TRAINING DATA
 # -----------------------------------------------
 bt_final_h1n1 <- fit(bt_final_h1n1_tune_wkfl, train_df)
 bt_final_seas <- fit(bt_final_seas_tune_wkfl, train_df)
 
 
-# -----------------------------------------------
-# 15. ROC CURVE VISUALIZATION (via last_fit results)
-# -----------------------------------------------
-bt_final_h1n1_fit <- bt_final_h1n1_tune_wkfl %>%
-  last_fit(split = data_split_h1n1)
-
-bt_final_seas_fit <- bt_final_seas_tune_wkfl %>%
-  last_fit(split = data_split_seas)
-
-# 1) Pull out predictions (with probabilities)
-bt_h1n1_preds <- bt_final_h1n1_fit %>% 
-  collect_predictions()
-bt_seas_preds <- bt_final_seas_fit  %>%
-  collect_predictions()
-
-# 2) Compute ROC curve data
-bt_roc_h1n1 <- roc_curve(bt_h1n1_preds, truth = h1n1_vaccine, .pred_1)
-bt_roc_seas <- roc_curve(bt_seas_preds, truth = seasonal_vaccine, .pred_1)
-
-# 3a) Plot separately
-autoplot(bt_roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve (Bagged Trees)")
-autoplot(bt_roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve (Bagged Trees)")
 
 # -----------------------------------------------
-# 16. MAKE PREDICTIONS ON TEST DATA
+# 18. MAKE PREDICTIONS ON TEST DATA
 # -----------------------------------------------
 # Add missing columns to test data to match training structure
 test_df_prepared <- test_df %>%
   mutate(
-    h1n1_vaccine = factor(NA, levels = c(0, 1)),
-    seasonal_vaccine = factor(NA, levels = c(0, 1)),
-    strata = NA_character_
-  )
+    h1n1_vaccine = factor(NA, levels = c(1, 0)),
+    seasonal_vaccine = factor(NA, levels = c(1, 0)),
+    strata = NA_character_)
 
 test_pred_h1n1_bagged_tree <- predict(bt_final_h1n1, test_df_prepared, type = "prob") %>% 
   pull(.pred_1)

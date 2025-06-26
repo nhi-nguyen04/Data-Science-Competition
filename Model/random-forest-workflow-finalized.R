@@ -53,12 +53,12 @@ categorical_vars <- setdiff(categorical_vars, c("respondent_id", "h1n1_vaccine",
 # -----------------------------------------------
 #Ensures random split with similar distribution of the outcome variable 
 data_split_h1n1 <- initial_split(train_df, prop = 0.8, strata = h1n1_vaccine)
-#train_data_h1n1 <- training(data_split_h1n1)
-#eval_data_h1n1  <- testing(data_split_h1n1)
+train_data_h1n1 <- training(data_split_h1n1)
+eval_data_h1n1  <- testing(data_split_h1n1)
 
 data_split_seas <- initial_split(train_df, prop = 0.8, strata = seasonal_vaccine)
-#train_data_seas <- training(data_split_seas)
-#eval_data_seas  <- testing(data_split_seas)
+train_data_seas <- training(data_split_seas)
+eval_data_seas  <- testing(data_split_seas)
 
 
 

@@ -1,6 +1,5 @@
-# -----------------------------------------------
-# 1.Pre Hypertuning
-# -----------------------------------------------
+# ───────────────1.Pre Hypertuning────────────────────────────────
+
 # We are  performing a model comparison across all types of models in this course:
 # decision trees, bagged trees, random forests, and gradient boosting.
 
@@ -8,45 +7,89 @@
 #For H1N1  Flu Vaccine#
 #######################
 
+preds_stacked_pre_tune_h1n1 <- bind_rows(
+  lr_h1n1_preds %>% mutate(model = "logistic_regression"),
+  dt_h1n1_preds %>% mutate(model = "decision_trees"),
+  bt_h1n1_preds %>% mutate(model = "bagged_trees"),
+  rf_h1n1_preds %>% mutate(model = "random_forest")
+)
 
-#Combine Preddictions
-bind_cols(rf_h1n1_preds,rf_h1n1_preds,rf_h1n1_preds,rf_h1n1_preds,rf_h1n1_preds)
-
-
-
-
-# Calculate the AUC for each model
-auc_tree   <- roc_auc(preds_combined, truth = still_customer, estimate = preds_tree)
-auc_bagged <- roc_auc(preds_combined, truth = still_customer, estimate = preds_bagging)
-auc_forest <- roc_auc(preds_combined, truth = still_customer, estimate = preds_forest)
-auc_boost  <- roc_auc(preds_combined, truth = still_customer, estimate = preds_boosting)
-
-# Combine AUCs into one tibble
-combined <- bind_rows(decision_tree = auc_tree,
-                      bagged_tree = auc_bagged,
-                      random_forest = auc_forest,
-                      boosted_tree = auc_boost,
-                      .id = "model")
-
-combined
+# Then calculate AUC for each model and ranking them
+auc_results_pre_tune_h1n1 <- preds_stacked_pre_tune_h1n1 %>%
+  group_by(model) %>%
+  roc_auc(truth = h1n1_vaccine, .pred_1)%>%
+  arrange(desc(.estimate))
 
 
+roc_data <- preds_stacked_pre_tune_h1n1 %>%
+  group_by(model) %>%
+  roc_curve(truth = h1n1_vaccine, .pred_1)
+
+# Plot the ROC curves
+roc_data %>%
+  autoplot()+ 
+  ggtitle("ROC curves of models")
 
 
-# Reshape the predictions into long format
-predictions_long <- tidyr::pivot_longer(preds_combined,
-                                        cols = starts_with("preds_"),
-                                        names_to = "model",
-                                        values_to = "predictions")
 
-predictions_long %>% 
-  # Group by model
-  group_by(model) %>% 
-  # Calculate values for every cutoff
-  roc_curve(truth = still_customer, 
-            estimate = predictions) %>%
-  # Create a plot from the calculated data
-  autoplot()
+##########################
+#For Seasonal Flu Vaccine#
+##########################
+
+preds_stacked_pre_tune_seas <- bind_rows(
+  lr_seas_preds %>% mutate(model = "logistic_regression"),
+  dt_seas_preds %>% mutate(model = "decision_trees"),
+  bt_seas_preds %>% mutate(model = "bagged_trees"),
+  rf_seas_preds %>% mutate(model = "random_forest")
+)
+
+# Then calculate AUC for each model and ranking them
+auc_results_pre_tune_seas <- preds_stacked_pre_tune_seas %>%
+  group_by(model) %>%
+  roc_auc(truth = seasonal_vaccine, .pred_1)%>%
+  arrange(desc(.estimate))
+
+
+roc_data <- preds_stacked_pre_tune_seas %>%
+  group_by(model) %>%
+  roc_curve(truth = seasonal_vaccine, .pred_1)
+
+# Plot the ROC curves
+roc_data %>%
+  autoplot()+ 
+  ggtitle("ROC curves of models")
+
+
+
+
+
+# ────────────────────────────────1.Post Hypertuning ────────────────────────────────
+
+#######################
+#For H1N1  Flu Vaccine#
+#######################
+
+preds_stacked_post_tune_h1n1 <- bind_rows(
+  dt_aftr_tunning_h1n1_preds %>% mutate(model = "decision_trees"),
+  bt_aftr_tunning_h1n1_preds %>% mutate(model = "bagged_trees"),
+  rf_aftr_tunning_h1n1_preds %>% mutate(model = "random_forest")
+)
+
+# Then calculate AUC for each model and ranking them
+auc_results_post_tune_h1n1 <- preds_stacked_post_tune_h1n1 %>%
+  group_by(model) %>%
+  roc_auc(truth = h1n1_vaccine, .pred_1)%>%
+  arrange(desc(.estimate))
+
+
+roc_data <- preds_stacked_post_tune_h1n1 %>%
+  group_by(model) %>%
+  roc_curve(truth = h1n1_vaccine, .pred_1)
+
+# Plot the ROC curves
+roc_data %>%
+  autoplot()+ 
+  ggtitle("ROC curves of models")
 
 
 
@@ -59,7 +102,24 @@ predictions_long %>%
 
 
 
+preds_stacked_post_tune_seas <- bind_rows(
+  dt_seas_preds %>% mutate(model = "decision_trees"),
+  bt_seas_preds %>% mutate(model = "bagged_trees"),
+  rf_seas_preds %>% mutate(model = "random_forest")
+)
 
-# -----------------------------------------------
-# 1.Post Hypertuning
-# -----------------------------------------------
+# Then calculate AUC for each model and ranking them
+auc_results_post_tune_seas <- preds_stacked_post_tune_seas %>%
+  group_by(model) %>%
+  roc_auc(truth = seasonal_vaccine, .pred_1)%>%
+  arrange(desc(.estimate))
+
+
+roc_data <- preds_stacked_post_tune_seas %>%
+  group_by(model) %>%
+  roc_curve(truth = seasonal_vaccine, .pred_1)
+
+# Plot the ROC curves
+roc_data %>%
+  autoplot()+ 
+  ggtitle("ROC curves of models")
