@@ -20,6 +20,8 @@ auc_results_pre_tune_h1n1 <- preds_stacked_pre_tune_h1n1 %>%
   roc_auc(truth = h1n1_vaccine, .pred_1)%>%
   arrange(desc(.estimate))
 
+auc_results_pre_tune_h1n1
+
 
 roc_data <- preds_stacked_pre_tune_h1n1 %>%
   group_by(model) %>%
@@ -49,6 +51,7 @@ auc_results_pre_tune_seas <- preds_stacked_pre_tune_seas %>%
   roc_auc(truth = seasonal_vaccine, .pred_1)%>%
   arrange(desc(.estimate))
 
+auc_results_pre_tune_seas
 
 roc_data <- preds_stacked_pre_tune_seas %>%
   group_by(model) %>%
@@ -70,6 +73,7 @@ roc_data %>%
 #######################
 
 preds_stacked_post_tune_h1n1 <- bind_rows(
+  lr_aftr_tunning_h1n1_preds %>% mutate(model = "logistic_regression"),
   dt_aftr_tunning_h1n1_preds %>% mutate(model = "decision_trees"),
   bt_aftr_tunning_h1n1_preds %>% mutate(model = "bagged_trees"),
   rf_aftr_tunning_h1n1_preds %>% mutate(model = "random_forest")
@@ -81,6 +85,7 @@ auc_results_post_tune_h1n1 <- preds_stacked_post_tune_h1n1 %>%
   roc_auc(truth = h1n1_vaccine, .pred_1)%>%
   arrange(desc(.estimate))
 
+auc_results_post_tune_h1n1
 
 roc_data <- preds_stacked_post_tune_h1n1 %>%
   group_by(model) %>%
@@ -103,9 +108,10 @@ roc_data %>%
 
 
 preds_stacked_post_tune_seas <- bind_rows(
-  dt_seas_preds %>% mutate(model = "decision_trees"),
-  bt_seas_preds %>% mutate(model = "bagged_trees"),
-  rf_seas_preds %>% mutate(model = "random_forest")
+  lr_aftr_tunning_seas_preds %>% mutate(model = "logistic_regression"),
+  dt_aftr_tunning_seas_preds %>% mutate(model = "decision_trees"),
+  bt_aftr_tunning_seas_preds %>% mutate(model = "bagged_trees"),
+  rf_aftr_tunning_seas_preds %>% mutate(model = "random_forest")
 )
 
 # Then calculate AUC for each model and ranking them
@@ -113,6 +119,8 @@ auc_results_post_tune_seas <- preds_stacked_post_tune_seas %>%
   group_by(model) %>%
   roc_auc(truth = seasonal_vaccine, .pred_1)%>%
   arrange(desc(.estimate))
+
+auc_results_post_tune_seas
 
 
 roc_data <- preds_stacked_post_tune_seas %>%

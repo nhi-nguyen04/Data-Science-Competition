@@ -305,20 +305,200 @@ lr_seasonal_dt_rs_results %>%
 
 #Use this to compare against other model types
 
-# -----------------------------------------------
-# 11. TRAIN FINAL MODELS ON FULL TRAINING DATA
-# -----------------------------------------------
-lr_final_h1n1 <- fit(lr_wf_h1n1, train_df)
-lr_final_seas <- fit(lr_wf_seas, train_df)
 
+# -----------------------------------------------
+# 11.Hyperparameter tuning
+# -----------------------------------------------
+lr_dt_tune_model <- logistic_reg(
+  penalty = tune(),   # let penalty be tuned
+  mixture = tune()    # optionally tune mixture (0 = ridge, 1 = lasso)
+) %>%
+  set_engine("glmnet") %>%
+  set_mode("classification")
+
+
+lr_dt_tune_model
+
+
+# Create a tuning workflow
+lr_h1n1_tune_wkfl <- lr_wf_h1n1 %>% 
+  # Replace model
+  update_model(lr_dt_tune_model)
+
+lr_h1n1_tune_wkfl
+
+
+lr_seas_tune_wkfl <- lr_wf_seas %>% 
+  # Replace model
+  update_model(lr_dt_tune_model)
+
+lr_seas_tune_wkfl
+
+
+
+
+penalty_range <- penalty(range = c(-4, 1))  # log scale
+mixture_range <- mixture(range = c(0, 1))
+
+log_grid <- grid_regular(penalty_range, mixture_range, levels = 5)
+
+set.seed(123)
+cv_folds_lr_h1n1 <- vfold_cv(train_data_h1n1, v = 5)
+cv_folds_lr_seas <- vfold_cv(train_data_seas, v = 5)
+
+
+# Hyperparameter tuning with grid search
+
+# For speed
+plan(multisession, workers = 4) 
+
+
+# Hyperparameter tuning
+lr_h1n1_dt_tuning <- lr_h1n1_tune_wkfl %>% 
+  tune_grid(resamples = h1n1_folds,
+            grid = log_grid,
+            metrics = data_metrics)
+
+
+lr_seas_dt_tuning <- lr_seas_tune_wkfl %>% 
+  tune_grid(resamples = seasonal_folds,
+            grid = log_grid,
+            metrics = data_metrics)
+
+# View results
+lr_h1n1_dt_tuning %>% 
+  collect_metrics()
+
+
+# View results
+lr_seas_dt_tuning %>% 
+  collect_metrics()
+
+
+# Collect detailed tuning results
+lr_h1n1_dt_tuning_results <- lr_h1n1_dt_tuning %>% 
+  collect_metrics(summarize = FALSE)
+
+# Explore detailed ROC AUC results for each fold
+lr_h1n1_dt_tuning_results %>% 
+  filter(.metric == "roc_auc") %>% 
+  group_by(id) %>% 
+  summarize(min_roc_auc = min(.estimate),
+            median_roc_auc = median(.estimate),
+            max_roc_auc = max(.estimate))
+
+# Collect detailed tuning results
+lr_seas_dt_tuning_results <- lr_seas_dt_tuning %>% 
+  collect_metrics(summarize = FALSE)
+
+# Explore detailed ROC AUC results for each fold
+lr_seas_dt_tuning_results %>% 
+  filter(.metric == "roc_auc") %>% 
+  group_by(id) %>% 
+  summarize(min_roc_auc = min(.estimate),
+            median_roc_auc = median(.estimate),
+            max_roc_auc = max(.estimate))
+
+
+
+# -----------------------------------------------
+# 12.Selecting the best model
+# -----------------------------------------------
+# Display 5 best performing models
+lr_h1n1_dt_tuning %>% 
+  show_best(metric = "roc_auc", n = 5)
+
+lr_seas_dt_tuning %>% 
+  show_best(metric = "roc_auc", n = 5)
+
+
+# Select based on best performance
+lr_best_h1n1_dt_model <- lr_h1n1_dt_tuning %>% 
+  # Choose the best model based on roc_auc
+  select_best(metric = 'roc_auc')
+
+lr_best_h1n1_dt_model
+
+
+lr_best_seas_dt_model <- lr_seas_dt_tuning %>% 
+  # Choose the best model based on roc_auc
+  select_best(metric = 'roc_auc')
+
+lr_best_seas_dt_model
+
+# -----------------------------------------------
+# 13.Finalize your workflow
+# -----------------------------------------------
+lr_final_h1n1_tune_wkfl <- lr_h1n1_tune_wkfl %>% 
+  finalize_workflow(lr_best_h1n1_dt_model)
+
+lr_final_h1n1_tune_wkfl
+
+
+lr_final_seas_tune_wkfl <- lr_seas_tune_wkfl %>% 
+  finalize_workflow(lr_best_seas_dt_model)
+
+lr_final_seas_tune_wkfl
+
+# -----------------------------------------------
+# 14. LAST_FIT ON THE HELD-OUT SPLITS
+# -----------------------------------------------
+#Here Training and test dataset are created
+#recipe trained and applied
+#Tune random forest trained with entire training dataset
+lr_h1n1_final_fit <- 
+  lr_final_h1n1_tune_wkfl %>% 
+  last_fit(split = data_split_h1n1)
+
+lr_seas_final_fit <- 
+  lr_final_seas_tune_wkfl %>% 
+  last_fit(split = data_split_seas)
+
+
+
+#-----------------------------------------------
+# 15. COLLECT METRICS
+# -----------------------------------------------
+#predictions and metrics are generated with test dataset
+lr_h1n1_final_fit %>% collect_metrics()
+lr_seas_final_fit  %>% collect_metrics()
+
+
+
+
+# -----------------------------------------------
+# 16. ROC CURVE VISUALIZATION (via last_fit results)
+# -----------------------------------------------
+#library(yardstick)
+#library(ggplot2)
+
+# 1) Pull out predictions (with probabilities)
+lr_aftr_tunning_h1n1_preds <- lr_h1n1_final_fit %>% 
+  collect_predictions()
+lr_aftr_tunning_seas_preds <- lr_seas_final_fit  %>%
+  collect_predictions()
+
+# 2) Compute ROC curve data
+lr_aftr_tunning_roc_h1n1 <- roc_curve(lr_aftr_tunning_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+lr_aftr_tunning_roc_seas <- roc_curve(lr_aftr_tunning_seas_preds, truth = seasonal_vaccine, .pred_1)
+
+# 3a) Plot separately
+autoplot(lr_aftr_tunning_roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve (Random Forest)")
+autoplot(lr_aftr_tunning_roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve (Random Forest)")
+
+# -----------------------------------------------
+# 17. TRAIN FINAL MODELS ON FULL TRAINING DATA
+# -----------------------------------------------
+lr_final_h1n1 <- fit(lr_final_h1n1_tune_wkfl, train_df)
+lr_final_seas <- fit(lr_final_seas_tune_wkfl, train_df)
 
 # Here I am checking for variable importance
-vip::vip(lr_final_h1n1, num_features= 15)
-vip::vip(lr_final_seas,  num_features= 15)
+#vip::vip(lr_final_h1n1, num_features= 15)
+#vip::vip(lr_final_seas,  num_features= 15)
 
 
 # -----------------------------------------------
-# 12. MAKE PREDICTIONS ON TEST DATA
+# 18. MAKE PREDICTIONS ON TEST DATA
 # -----------------------------------------------
 # Add missing columns to test data to match training structure
 test_df_prepared <- test_df %>%
