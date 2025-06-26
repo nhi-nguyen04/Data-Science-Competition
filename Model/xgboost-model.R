@@ -151,6 +151,44 @@ autoplot(xgb_roc_seas) +
   ggtitle("Seasonal Vaccine ROC Curve (XGBoost)")
 
 
+
+
+
+
+
+#2b.Calcualte the ROC AUC VALUES
+roc_auc(xgb_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+
+roc_auc(xgb_seas_preds, truth = seasonal_vaccine, .pred_1)
+
+
+#confusion matrix
+
+# Compute confusion matrix with Heatmap for counts
+xgb_h1n1_preds %>%
+  conf_mat(truth = h1n1_vaccine, estimate = .pred_class) %>%
+  autoplot(type = "heatmap")
+
+xgb_seas_preds %>%
+  conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
+  autoplot(type = "heatmap")
+
+# Compute confusion matrix with mosaic plots for visualization of sensitivity and specitivity
+xgb_h1n1_preds %>%
+  conf_mat(truth = h1n1_vaccine, estimate = .pred_class) %>%
+  autoplot(type = "mosaic")
+
+xgb_seas_preds %>%
+  conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
+  autoplot(type = "mosaic")
+
+#custom metric predictions 
+custom_metrics <- metric_set(accuracy,sens,spec,roc_auc)
+
+custom_metrics(xgb_h1n1_preds,truth = h1n1_vaccine, estimate = .pred_class,.pred_1)
+custom_metrics(xgb_seas_preds,truth = seasonal_vaccine, estimate = .pred_class,.pred_1)
+
+
 # -----------------------------------------------
 # 10.Cross Validation
 # -----------------------------------------------
@@ -175,7 +213,7 @@ seasonal_folds <- vfold_cv(train_data_seas,
 seasonal_folds
 
 # Create custom metrics function
-data_metrics <- metric_set(roc_auc, sens, spec, accuracy)
+data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 
 # Some info from data camp course:
@@ -214,7 +252,8 @@ xgb_h1n1_dt_rs_results %>%
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
             median = median(.estimate),
-            max = max(.estimate))
+            max = max(.estimate),
+            sd = sd(.estimate))
 
 
 xgb_seasonal_dt_rs_results <- xgb_seasonal_dt_rs %>% 
@@ -225,7 +264,8 @@ xgb_seasonal_dt_rs_results %>%
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
             median = median(.estimate),
-            max = max(.estimate))
+            max = max(.estimate),
+            sd = sd(.estimate))
 
 
 # -----------------------------------------------
@@ -237,7 +277,7 @@ xgb_dt_tune_model <- boost_tree(
   tree_depth = tune(),
   trees = 500, 
   sample_size = tune()) %>%
-  set_engine("xgboost", importance = "impurity") %>%
+  set_engine("xgboost") %>%
   set_mode("classification") 
 
 
@@ -392,19 +432,19 @@ xgb_seas_final_fit  %>% collect_metrics()
 #library(ggplot2)
 
 # 1) Pull out predictions (with probabilities)
-xgb_h1n1_preds <- xgb_h1n1_final_fit %>% 
+xgb_aftr_tunning_h1n1_preds <- xgb_h1n1_final_fit %>% 
   collect_predictions()
-xgb_seas_preds <- xgb_seas_final_fit  %>% 
+xgb_aftr_tunning_seas_preds <- xgb_seas_final_fit  %>% 
   collect_predictions()
 
 # 2) Compute ROC curve data
-xgb_roc_h1n1 <- roc_curve(xgb_h1n1_preds, truth = h1n1_vaccine, .pred_1)
-xgb_roc_seas <- roc_curve(xgb_seas_preds, truth = seasonal_vaccine, .pred_1)
+xgb_aftr_tunning_roc_h1n1 <- roc_curve(xgb_aftr_tunning_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+xgb_aftr_tunning_roc_seas <- roc_curve(xgb_aftr_tunning_seas_preds, truth = seasonal_vaccine, .pred_1)
 
 # 3a) Plot separately
-autoplot(xgb_roc_h1n1) +
+autoplot(xgb_aftr_tunning_roc_h1n1) +
   ggtitle("Final H1N1 Vaccine ROC Curve (XGBoost)")
-autoplot(xgb_roc_seas) + 
+autoplot(xgb_aftr_tunning_roc_seas) + 
   ggtitle("Final Seasonal Vaccine ROC Curve(XGBoost)")
 
 
@@ -416,8 +456,8 @@ xgb_final_seas <- fit(xgb_final_seas_tune_wkfl, train_df)
 
 
 # Here I am checking for variable importance
-vip::vip(xgb_final_h1n1, num_features= 15)
-vip::vip(xgb_final_seas,  num_features= 15)
+#vip::vip(xgb_final_h1n1, num_features= 15)
+#vip::vip(xgb_final_seas,  num_features= 15)
 
 
 # -----------------------------------------------

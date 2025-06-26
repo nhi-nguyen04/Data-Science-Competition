@@ -11,7 +11,8 @@ preds_stacked_pre_tune_h1n1 <- bind_rows(
   lr_h1n1_preds %>% mutate(model = "logistic_regression"),
   dt_h1n1_preds %>% mutate(model = "decision_trees"),
   bt_h1n1_preds %>% mutate(model = "bagged_trees"),
-  rf_h1n1_preds %>% mutate(model = "random_forest")
+  rf_h1n1_preds %>% mutate(model = "random_forest"),
+  xgb_h1n1_preds %>% mutate(model = "xgboost")
 )
 
 # Then calculate AUC for each model and ranking them
@@ -42,7 +43,8 @@ preds_stacked_pre_tune_seas <- bind_rows(
   lr_seas_preds %>% mutate(model = "logistic_regression"),
   dt_seas_preds %>% mutate(model = "decision_trees"),
   bt_seas_preds %>% mutate(model = "bagged_trees"),
-  rf_seas_preds %>% mutate(model = "random_forest")
+  rf_seas_preds %>% mutate(model = "random_forest"),
+  xgb_seas_preds %>% mutate(model = "xgboost")
 )
 
 # Then calculate AUC for each model and ranking them
@@ -76,7 +78,8 @@ preds_stacked_post_tune_h1n1 <- bind_rows(
   lr_aftr_tunning_h1n1_preds %>% mutate(model = "logistic_regression"),
   dt_aftr_tunning_h1n1_preds %>% mutate(model = "decision_trees"),
   bt_aftr_tunning_h1n1_preds %>% mutate(model = "bagged_trees"),
-  rf_aftr_tunning_h1n1_preds %>% mutate(model = "random_forest")
+  rf_aftr_tunning_h1n1_preds %>% mutate(model = "random_forest"),
+  xgb_aftr_tunning_h1n1_preds %>% mutate(model = "xgboost")
 )
 
 # Then calculate AUC for each model and ranking them
@@ -111,7 +114,9 @@ preds_stacked_post_tune_seas <- bind_rows(
   lr_aftr_tunning_seas_preds %>% mutate(model = "logistic_regression"),
   dt_aftr_tunning_seas_preds %>% mutate(model = "decision_trees"),
   bt_aftr_tunning_seas_preds %>% mutate(model = "bagged_trees"),
-  rf_aftr_tunning_seas_preds %>% mutate(model = "random_forest")
+  rf_aftr_tunning_seas_preds %>% mutate(model = "random_forest"),
+  xgb_aftr_tunning_seas_preds %>% mutate(model = "xgboost")
+  
 )
 
 # Then calculate AUC for each model and ranking them
@@ -131,3 +136,21 @@ roc_data <- preds_stacked_post_tune_seas %>%
 roc_data %>%
   autoplot()+ 
   ggtitle("ROC curves of models")
+
+
+
+
+#The best models so far I used a basic model formula
+# -----------------------------------------------
+# 19. CREATE SUBMISSION FILE
+# -----------------------------------------------
+submission_random_forest <- tibble(
+  respondent_id = test_df$respondent_id,
+  h1n1_vaccine = test_pred_h1n1_xgboost,
+  seasonal_vaccine = test_pred_seas_log_reg)
+
+
+# -----------------------------------------------
+# 20. SAVE SUBMISSION
+# -----------------------------------------------
+write_csv(submission_random_forest, "xgboost+logreg.csv")
