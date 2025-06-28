@@ -1,6 +1,7 @@
 # Predicting H1N1 and Seasonal Flu Vaccine Uptake
 # A tidymodels approach with ridge logistic regression
 
+
 # -----------------------------------------------
 # 1. SET UP ENVIRONMENT
 # -----------------------------------------------
@@ -22,13 +23,14 @@ train_labels   <- read_csv("Data/training_set_labels.csv")
 train_df       <- left_join(train_features, train_labels, by = "respondent_id")
 test_df        <- read_csv("Data/test_set_features.csv")
 
-glimpse(train_df)
-skim(train_df)
+#glimpse(train_df)
+#skim(train_df)
 #View(train_df)
+class(train_df)
+write.csv(train_df, "output.csv", row.names = FALSE)
 # -----------------------------------------------
 # 3. DATA PREPARATION 
 # -----------------------------------------------
-
 train_df <- train_df %>%
   mutate(
     h1n1_vaccine     = factor(h1n1_vaccine, levels = c(1, 0)),
@@ -48,49 +50,18 @@ categorical_vars <- train_df %>% select(where(is.character), where(is.factor)) %
 numeric_vars     <- setdiff(numeric_vars,    c("respondent_id"))
 categorical_vars <- setdiff(categorical_vars, c("respondent_id", "h1n1_vaccine", "seasonal_vaccine"))
 
-# train_df <- train_df %>%
-#   mutate(
-#     h1n1_vaccine     = factor(h1n1_vaccine, levels = c(0, 1)),
-#     seasonal_vaccine = factor(seasonal_vaccine, levels = c(0, 1))
-#   )
-# 
-# numeric_cols <- c(
-#   'h1n1_concern', 'h1n1_knowledge', 'behavioral_antiviral_meds',
-#   'behavioral_avoidance', 'behavioral_face_mask', 'behavioral_wash_hands',
-#   'behavioral_large_gatherings', 'behavioral_outside_home',
-#   'behavioral_touch_face', 'doctor_recc_h1n1', 'doctor_recc_seasonal',
-#   'chronic_med_condition', 'child_under_6_months', 'health_worker',
-#   'health_insurance', 'opinion_h1n1_vacc_effective', 'opinion_h1n1_risk',
-#   'opinion_h1n1_sick_from_vacc', 'opinion_seas_vacc_effective',
-#   'opinion_seas_risk', 'opinion_seas_sick_from_vacc', 'household_adults',
-#   'household_children'
-# )
-# 
-# # Stratify for splitting
-# train_df <- train_df %>%
-#   mutate(strata = paste(h1n1_vaccine, seasonal_vaccine))
-# 
-# data_split <- initial_split(train_df, prop = 0.67, strata = strata)
-# train_data <- training(data_split)
-# eval_data  <- testing(data_split)
-# 
-# # Identify categorical predictors
-# all_cols_in_train   <- names(train_data)
-# non_predictors      <- c("respondent_id", "h1n1_vaccine", "seasonal_vaccine", "strata")
-# potential_preds     <- setdiff(all_cols_in_train, non_predictors)
-# categorical_cols    <- setdiff(potential_preds, numeric_cols)
-
+glimpse(train_df)
 # -----------------------------------------------
 # 4. CREATE TWO SEPARATE SPLITS (ONE PER TARGET)---> Avoids class imbalance
 # -----------------------------------------------
 #Ensures random split with similar distribution of the outcome variable 
+data_split_h1n1 <- initial_split(train_df, prop = 0.8, strata = h1n1_vaccine)
 train_data_h1n1 <- training(data_split_h1n1)
 eval_data_h1n1  <- testing(data_split_h1n1)
 
 data_split_seas <- initial_split(train_df, prop = 0.8, strata = seasonal_vaccine)
 train_data_seas <- training(data_split_seas)
 eval_data_seas  <- testing(data_split_seas)
-
 # -----------------------------------------------
 # 5. SPECIFY BASE MODEL (LOGISTIC REGRESSION)
 # -----------------------------------------------
@@ -104,7 +75,6 @@ log_spec <- logistic_reg(
 # -----------------------------------------------
 # 6. R E C I P E  –– consistent imputation + dummies
 # -----------------------------------------------
-
 h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   update_role(respondent_id, new_role = "ID") %>%
   # Remove the other target (seasonal) if it’s present
@@ -121,10 +91,6 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   # Normalize numeric columns
   step_normalize(all_numeric_predictors()) # this migth be wrong???????????????????
 
-#the types collum migth show a problem
-h1n1_recipe%>%
-  summary()
-tidy(h1n1_recipe, number = 4)
 
 
 seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
@@ -135,8 +101,6 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   step_dummy(all_nominal_predictors()) %>%
   step_zv(all_predictors()) %>% 
   step_normalize(all_numeric_predictors())
-
-tidy(seas_recipe, number = 4)
 
 # -----------------------------------------------
 # 7. CREATE WORKFLOWS

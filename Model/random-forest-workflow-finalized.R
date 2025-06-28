@@ -22,9 +22,11 @@ train_labels   <- read_csv("Data/training_set_labels.csv")
 train_df       <- left_join(train_features, train_labels, by = "respondent_id")
 test_df        <- read_csv("Data/test_set_features.csv")
 
-glimpse(train_df)
-skim(train_df)
+#glimpse(train_df)
+#skim(train_df)
 #View(train_df)
+class(train_df)
+write.csv(train_df, "output.csv", row.names = FALSE)
 # -----------------------------------------------
 # 3. DATA PREPARATION 
 # -----------------------------------------------
@@ -60,8 +62,20 @@ data_split_seas <- initial_split(train_df, prop = 0.8, strata = seasonal_vaccine
 train_data_seas <- training(data_split_seas)
 eval_data_seas  <- testing(data_split_seas)
 
-
-
+#For data leakege
+# You did take a couple of key steps to guard against label leakage, but you didn’t explicitly call out “data leakage” in comments or perform any dedicated leakage checks beyond those:
+#   
+#   Removing the Other Target
+# 
+# In each recipe you remove the “other” vaccine outcome (step_rm(seasonal_vaccine) in the H1N1 recipe, and vice versa). That prevents direct leakage of one label into the prediction of the other.
+# 
+# Stratified Splitting & Hold-out
+# 
+# By using initial_split(..., strata = h1n1_vaccine) (and similarly for seasonal), the hold-out set really is held-out, and you never train on any of those rows until last_fit().
+# 
+# ID Role Assignment
+# 
+# You set respondent_id to an “ID” role so it isn’t inadvertently treated as a predictor.
 
 
 # -----------------------------------------------
@@ -182,8 +196,9 @@ rf_seas_preds %>%
   conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
   autoplot(type = "mosaic")
 
-#custom metric predictions 
-custom_metrics <- metric_set(accuracy,sens,spec,roc_auc)
+#custom metric predictions --> we added f1 score
+custom_metrics <- metric_set(accuracy,sens,spec,roc_auc,f_meas)
+
 
 custom_metrics(rf_h1n1_preds,truth = h1n1_vaccine, estimate = .pred_class,.pred_1)
 custom_metrics(rf_seas_preds,truth = seasonal_vaccine, estimate = .pred_class,.pred_1)

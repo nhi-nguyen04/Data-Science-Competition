@@ -169,7 +169,7 @@ cross_tab_df$Label <- paste0(cross_tab_df$Count, "\n(", round(cross_tab_df$Perce
 # Create heatmap we need
 heatmap_plot <- ggplot(cross_tab_df, aes(x = Seasonal, y = H1N1, fill = Percentage)) +
   geom_tile(color = "white", size = 0.5) +
-  geom_text(aes(label = Label), color = "white", fontface = "bold", size = 4) +
+  geom_text(aes(label = Label), color = "white", fontface = "bold", linewidth = 4) +
   scale_fill_viridis_c(option = "D", direction = -1) +
   labs(
     title = "Relationship Between H1N1 and Seasonal Flu Vaccination",
