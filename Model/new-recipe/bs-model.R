@@ -23,7 +23,7 @@ train_labels   <- read_csv("Data/training_set_labels.csv")
 train_df       <- left_join(train_features, train_labels, by = "respondent_id")
 test_df        <- read_csv("Data/test_set_features.csv")
 
-#glimpse(train_df)
+glimpse(train_df)
 #skim(train_df)
 #View(train_df)
 
@@ -74,7 +74,15 @@ log_spec <- logistic_reg(
 # -----------------------------------------------
 # 6. R E C I P E  –– consistent imputation + dummies
 # -----------------------------------------------
-h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
+h1n1_recipe <- recipe(h1n1_vaccine ~ doctor_recc_h1n1+
+                        opinion_h1n1_vacc_effective+
+                        opinion_h1n1_risk+
+                        employment_industry+
+                        doctor_recc_seasonal+
+                        health_worker+
+                        age_group+
+                        opinion_seas_risk+
+                        education+respondent_id+seasonal_vaccine, data = train_data_h1n1) %>%
   update_role(respondent_id, new_role = "ID") %>%
   # Remove the other target (seasonal) if it’s present
   #creates a specification of a recipe step that will remove selected variables.
@@ -87,10 +95,20 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   step_dummy(all_nominal_predictors()) %>%
   
   # 3. Add just a few key interactions
-  step_interact(terms = ~ h1n1_concern:opinion_h1n1_vacc_effective) %>%
-  step_interact(terms = ~ doctor_recc_h1n1:health_insurance) %>%
-  step_interact(terms = ~ chronic_med_condition:health_insurance)%>%
+  # 1) Doctor’s H1N1 rec × perceived H1N1 risk
+  step_interact(terms = ~ doctor_recc_h1n1:opinion_h1n1_risk) %>%
   
+  # 2) Doctor’s H1N1 rec × perceived H1N1 efficacy
+  step_interact(terms = ~ doctor_recc_h1n1:opinion_h1n1_vacc_effective) %>%
+  
+  # 3) H1N1 efficacy belief × perceived risk
+  step_interact(terms = ~ opinion_h1n1_vacc_effective:opinion_h1n1_risk) %>%
+  
+  # 4) Doctor’s H1N1 rec × doctor’s seasonal rec (cross-vaccine reinforcement)
+  step_interact(terms = ~ doctor_recc_h1n1:doctor_recc_seasonal) %>%
+  
+  # 5) Seasonal-vax rec × H1N1 efficacy belief (spill-over effect)
+  step_interact(terms = ~ doctor_recc_seasonal:opinion_h1n1_vacc_effective) %>%
   # 4. Remove zero variance AFTER interactions
   step_zv(all_predictors()) %>%
   
@@ -99,24 +117,32 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
 
 
 
-seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
+
+
+
+
+seas_recipe <- recipe(seasonal_vaccine ~ opinion_seas_risk+
+                        age_group+
+                        doctor_recc_seasonal+
+                        opinion_h1n1_vacc_effective+
+                        opinion_seas_vacc_effective+  # ADD THIS LINE
+                        opinion_seas_sick_from_vacc+
+                        employment_industry+
+                        health_worker+
+                        education+respondent_id+h1n1_vaccine, data = train_data_seas) %>%
   update_role(respondent_id, new_role = "ID") %>%
   step_rm(h1n1_vaccine) %>%
   # 1. Handle missing values FIRST
   step_impute_median(all_numeric_predictors()) %>%
   step_unknown(all_nominal_predictors()) %>%
-  
   # 2. Create dummy variables
   step_dummy(all_nominal_predictors()) %>%
-  
-  # 3. Add just a few key interactions
-  step_interact(terms = ~ h1n1_concern:opinion_h1n1_vacc_effective) %>%
-  step_interact(terms = ~ doctor_recc_h1n1:health_insurance) %>%
-  step_interact(terms = ~ chronic_med_condition:health_insurance)%>%
-  
+  # 3. Add interactions (now these variables exist)
+  step_interact(terms = ~ opinion_seas_vacc_effective:opinion_seas_risk) %>%
+  step_interact(terms = ~ opinion_seas_vacc_effective:doctor_recc_seasonal) %>%
+  step_interact(terms = ~ opinion_seas_risk:doctor_recc_seasonal) %>%
   # 4. Remove zero variance AFTER interactions
   step_zv(all_predictors()) %>%
-  
   # 5. Normalize last
   step_normalize(all_numeric_predictors())
 
@@ -477,6 +503,18 @@ lr_final_seas <- fit(lr_final_seas_tune_wkfl, train_df)
 # Here I am checking for variable importance
 vip::vip(lr_final_h1n1, num_features= 20)
 vip::vip(lr_final_seas,  num_features= 20)
+
+
+# vip::vi(lr_final_h1n1)%>%
+#   arrange(desc(Importance)) %>%
+#   slice_head(n = 5) %>%
+#   pull(Variable)
+# 
+# 
+# vip::vi(lr_final_seas)%>%
+#   arrange(desc(Importance)) %>%
+#   slice_head(n = 5) %>%
+#   pull(Variable)
 
 
 # -----------------------------------------------

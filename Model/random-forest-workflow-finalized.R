@@ -94,33 +94,67 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   # Remove the other target (seasonal) if it’s present
   #creates a specification of a recipe step that will remove selected variables.
   step_rm(seasonal_vaccine) %>%
-  # Impute all numeric predictors by median:
+  # 1. Handle missing values FIRST
   step_impute_median(all_numeric_predictors()) %>%
-  # Create an "unknown" level for any missing factor
   step_unknown(all_nominal_predictors()) %>%
-  # One‐hot encode all factors
+  
+  # 2. Create dummy variables
   step_dummy(all_nominal_predictors()) %>%
-  # <- drops any predictors that have zero variance
-  step_zv(all_predictors()) %>% 
-  # Normalize numeric columns
-  step_normalize(all_numeric_predictors()) # this migth be wrong???????????????????
+  
+  # 3. Add just a few key interactions
+  # — Clinical × Attitude — 
+  step_interact(terms = ~ doctor_recc_h1n1:opinion_h1n1_risk) %>%
+  step_interact(terms = ~ doctor_recc_h1n1:opinion_h1n1_vacc_effective) %>%
+  
+  # — Clinical × Access —
+  step_interact(terms = ~ doctor_recc_h1n1:health_insurance) %>%
+  
+  # — Attitude × Concern —
+  step_interact(terms = ~ opinion_h1n1_risk:h1n1_concern) %>%
+  step_interact(terms = ~ opinion_h1n1_vacc_effective:h1n1_concern) %>%
+  
+  # — Cross‐vaccine Attitudes —
+  step_interact(terms = ~ opinion_seas_risk:opinion_h1n1_risk) %>%
+  step_interact(terms = ~ doctor_recc_seasonal:opinion_h1n1_vacc_effective) %>%
+  
+  # — Occupational/Knowledge Synergy —
+  step_interact(terms = ~ health_worker:h1n1_knowledge) %>%
+  
+  # — Risk vs. Side‐Effect Worry —
+  step_interact(terms = ~ opinion_h1n1_risk:opinion_h1n1_sick_from_vacc) %>%
+  
+  # 4. Remove zero variance AFTER interactions
+  step_zv(all_predictors()) %>%
+  
+  # 5. Normalize last
+  step_normalize(all_numeric_predictors())
 
-#the types collum migth show a problem
-h1n1_recipe%>%
-  summary()
-tidy(h1n1_recipe, number = 4)
 
 
 seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   update_role(respondent_id, new_role = "ID") %>%
   step_rm(h1n1_vaccine) %>%
+  # 1. Handle missing values FIRST
   step_impute_median(all_numeric_predictors()) %>%
   step_unknown(all_nominal_predictors()) %>%
+  
+  # 2. Create dummy variables
   step_dummy(all_nominal_predictors()) %>%
-  step_zv(all_predictors()) %>% 
+  
+  # 3. Add just a few key interactions
+  step_interact(terms = ~ opinion_seas_vacc_effective:opinion_seas_risk) %>%
+  step_interact(terms = ~ opinion_seas_vacc_effective:doctor_recc_seasonal) %>%
+  #step_interact(terms = ~ opinion_seas_vacc_effective:age_group) %>%
+  step_interact(terms = ~ opinion_seas_risk:doctor_recc_seasonal) %>%
+  #step_interact(terms = ~ opinion_seas_risk:age_group) %>%
+  #step_interact(terms = ~ doctor_recc_seasonal:age_group) %>%
+  
+  # 4. Remove zero variance AFTER interactions
+  step_zv(all_predictors()) %>%
+  
+  # 5. Normalize last
   step_normalize(all_numeric_predictors())
 
-tidy(seas_recipe, number = 4)
 
 # -----------------------------------------------
 # 7.WORKFLOWS
@@ -481,8 +515,8 @@ rf_final_seas <- fit(rf_final_seas_tune_wkfl, train_df)
 
 
 # Here I am checking for variable importance
-vip::vip(rf_final_h1n1, num_features= 15)
-vip::vip(rf_final_seas,  num_features= 15)
+vip::vip(rf_final_h1n1, num_features= 36)
+vip::vip(rf_final_seas,  num_features= 36)
 
 
 # -----------------------------------------------
