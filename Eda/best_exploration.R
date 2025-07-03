@@ -49,11 +49,98 @@ labels_df   <- read.csv("Data/training_set_labels.csv")
 # -----------------------------------------------
 lapply(features_df, unique)
 
-#the labels don't have to be processed
+# the labels don't have to be processed
 lapply(labels_df, unique)
 
-#missing 
-vis_miss(features_df,warn_large_data = FALSE)
+# Rename labels
+features_df <- features_df %>%
+  rename("Respondend ID" = respondent_id ,
+         "H1N1 Concern" = h1n1_concern,
+         "H1N1 Knowledge" = h1n1_knowledge,
+         "Antiviral Medication" = behavioral_antiviral_meds,
+         "Avoidance" = behavioral_avoidance,
+         "Face Mask" = behavioral_face_mask,
+         "Wash Hands" = behavioral_wash_hands,
+         "Large Gatherings" = behavioral_large_gatherings,
+         "Outside Home" = behavioral_outside_home,
+         "Touch Face" = behavioral_touch_face,
+         "Doctor Recommendation H1N1" = doctor_recc_h1n1,
+         "Doctor Recommendation Seasonal" = doctor_recc_seasonal,
+         "Chronical Medical Condition" = chronic_med_condition,
+         "Child under 6 Months" = child_under_6_months,
+         "Health Worker" = health_worker,
+         "Health Insurance" = health_insurance,
+         "Opinion H1N1 Effect" = opinion_h1n1_vacc_effective,
+         "Opinion H1N1 Risk" = opinion_h1n1_risk,
+         "Opinion H1N1 sick from Vaccine" = opinion_h1n1_sick_from_vacc,
+         "Opinion Seasonal Effect" = opinion_seas_vacc_effective,
+         "Opinion Seasonal Risk" = opinion_seas_risk,
+         "Opinion Seasonal sick from Vaccine" = opinion_seas_sick_from_vacc,
+         "Age Group" = age_group,
+         "Education Level" = education,
+         "Race" = race,
+         "Sex" = sex,
+         "Income Level" = income_poverty,
+         "Marital Status" = marital_status,
+         "Housing Situation" = rent_or_own,
+         "Employment Status" = employment_status,
+         "Geographical Region" = hhs_geo_region,
+         "Metropolitan Statistical Areas" = census_msa,
+         "Number of other Adults in Household" = household_adults,
+         "Number of Children in Household" = household_children,
+         "Working Industry" = employment_industry,
+         "Type of Occupation" = employment_occupation)
+
+# missing 
+vis_miss(features_df, warn_large_data = FALSE) +
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1),
+        axis.text.y = element_text(size = 8)) +
+  ggtitle("Missing Data by Variable") +
+  labs(x = "Variables")
+
+gg_miss_var(features_df) +
+  scale_x_discrete(labels = c(
+    "respondent_id" = "Respondend ID",
+    "h1n1_concern" = "H1N1 Concern",
+    "h1n1_knowledge" = "H1N1 Knowledge",
+    "behavioral_antiviral_meds" = "Antiviral Medication",
+    "behavioral_avoidance" = "Avoidance",
+    "behavioral_face_mask" = "Face Mask",
+    "behavioral_wash_hands" = "Wash Hands",
+    "behavioral_large_gatherings" = "Large Gatherings",
+    "behavioral_outside_home" = "Outside Home",
+    "behavioral_touch_face" = "Touch Face",
+    "doctor_recc_h1n1" = "Doctor Recommendation H1N1",
+    "doctor_recc_seasonal" = "Doctor Recommendation Seasonal",
+    "chronic_med_condition" = "Chronical Medical Condition",
+    "child_under_6_months" = "Child under 6 Months",
+    "health_worker" = "Health Worker",
+    "health_insurance" = "Health Insurance",
+    "opinion_h1n1_vacc_effective" = "Opinion H1N1 Effect",
+    "opinion_h1n1_risk" = "Opinion H1N1 Risk",
+    "opinion_h1n1_sick_from_vacc" = "Opinion H1N1 sick from Vaccine",
+    "opinion_seas_vacc_effective" = "Opinion Seasonal Effect",
+    "opinion_seas_risk" = "Opinion Seasonal Risk",
+    "opinion_seas_sick_from_vacc" = "Opinion Seasonal sick from Vaccine",
+    "age_group" = "Age Group",
+    "education" = "Education Level",
+    "race" = "Race",
+    "sex" = "Sex",
+    "income_poverty" = "Income Level",
+    "marital_status" = "Marital Status",
+    "rent_or_own" = "Housing Situation",
+    "employment_status" = "Employment Status",
+    "hhs_geo_region" = "Geographical Region",
+    "census_msa" = "Metropolitan Statistical Areas",
+    "household_adults" = "Number of other Adults in Household",
+    "household_children" = "Number of Children in Household",
+    "employment_industry" = "Working Industry",
+    "employment_occupation" = "Type of Occupation"
+  )) +
+  labs(x = "Variable", y = "Number of Missing") +
+  ggtitle("Missing Data by Variable") +
+  theme(axis.text.y = element_text(size = 7))
 
 #Only columns with missing
 features_df %>%
@@ -64,7 +151,7 @@ features_df %>%
 # 4. PLOTS DESIGN -> VACCINATION RATE
 # -----------------------------------------------
 
-#plot function
+# plot function
 create_vaccine_plot <- function(data, vaccine_type) {
   var_name <- paste0(vaccine_type, "_vaccine")
   title    <- sprintf("%s Vaccination Status",
@@ -207,6 +294,9 @@ heatmap_plot
 #------------------------------
 #10. JOINING FEATURES AND LABELS + config
 #------------------------------
+
+# Reload Data
+features_df <- read.csv("Data/training_set_features.csv")
 
 joined_df <- features_df %>%
   inner_join(labels_df, by = "respondent_id") %>%
@@ -554,6 +644,44 @@ missing_plot <- ggplot(missing_summary %>% filter(missing > 0),
     y = "Missing Values (%)",
     fill = "Feature Type"
   ) +
-  theme(axis.text.y = element_text(size = 8))
+  theme(axis.text.y = element_text(size = 8)) +
+  scale_x_discrete(labels = c(
+    "respondent_id" = "Respondend ID",
+    "h1n1_concern" = "H1N1 Concern",
+    "h1n1_knowledge" = "H1N1 Knowledge",
+    "behavioral_antiviral_meds" = "Antiviral Medication",
+    "behavioral_avoidance" = "Avoidance",
+    "behavioral_face_mask" = "Face Mask",
+    "behavioral_wash_hands" = "Wash Hands",
+    "behavioral_large_gatherings" = "Large Gatherings",
+    "behavioral_outside_home" = "Outside Home",
+    "behavioral_touch_face" = "Touch Face",
+    "doctor_recc_h1n1" = "Doctor Recommendation H1N1",
+    "doctor_recc_seasonal" = "Doctor Recommendation Seasonal",
+    "chronic_med_condition" = "Chronical Medical Condition",
+    "child_under_6_months" = "Child under 6 Months",
+    "health_worker" = "Health Worker",
+    "health_insurance" = "Health Insurance",
+    "opinion_h1n1_vacc_effective" = "Opinion H1N1 Effect",
+    "opinion_h1n1_risk" = "Opinion H1N1 Risk",
+    "opinion_h1n1_sick_from_vacc" = "Opinion H1N1 sick from Vaccine",
+    "opinion_seas_vacc_effective" = "Opinion Seasonal Effect",
+    "opinion_seas_risk" = "Opinion Seasonal Risk",
+    "opinion_seas_sick_from_vacc" = "Opinion Seasonal sick from Vaccine",
+    "age_group" = "Age Group",
+    "education" = "Education Level",
+    "race" = "Race",
+    "sex" = "Sex",
+    "income_poverty" = "Income Level",
+    "marital_status" = "Marital Status",
+    "rent_or_own" = "Housing Situation",
+    "employment_status" = "Employment Status",
+    "hhs_geo_region" = "Geographical Region",
+    "census_msa" = "Metropolitan Statistical Areas",
+    "household_adults" = "Number of other Adults in Household",
+    "household_children" = "Number of Children in Household",
+    "employment_industry" = "Working Industry",
+    "employment_occupation" = "Type of Occupation"
+  ))
 
 missing_plot
