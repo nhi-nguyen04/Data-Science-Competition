@@ -144,13 +144,13 @@ roc_data %>%
 # -----------------------------------------------
 # 19. CREATE SUBMISSION FILE
 # -----------------------------------------------
-submission_random_forest <- tibble(
+submission_best_model <- tibble(
   respondent_id = test_df$respondent_id,
   h1n1_vaccine = test_pred_h1n1_xgboost,
-  seasonal_vaccine = test_pred_seas_log_reg)
+  seasonal_vaccine = test_pred_seas_xgboost)
 
 
 # -----------------------------------------------
 # 20. SAVE SUBMISSION
 # -----------------------------------------------
-write_csv(submission_random_forest, "xgboost+logreg.csv")
+write_csv(submission_random_forest, "xgboost-best-model.csv")

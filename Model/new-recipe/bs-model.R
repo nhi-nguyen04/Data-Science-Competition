@@ -74,45 +74,27 @@ log_spec <- logistic_reg(
 # -----------------------------------------------
 # 6. R E C I P E  –– consistent imputation + dummies
 # -----------------------------------------------
-h1n1_recipe <- recipe(h1n1_vaccine ~ doctor_recc_h1n1+
-                        opinion_h1n1_vacc_effective+
-                        opinion_h1n1_risk+
-                        employment_industry+
-                        doctor_recc_seasonal+
-                        health_worker+
-                        age_group+
-                        opinion_seas_risk+
-                        education+respondent_id+seasonal_vaccine, data = train_data_h1n1) %>%
+h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   update_role(respondent_id, new_role = "ID") %>%
-  # Remove the other target (seasonal) if it’s present
-  #creates a specification of a recipe step that will remove selected variables.
-  step_rm(seasonal_vaccine) %>%
-  # 1. Handle missing values FIRST
+  step_rm(seasonal_vaccine) %>%  # Remove target leakage
+  
+  # 1. Handle missing values first
   step_impute_median(all_numeric_predictors()) %>%
   step_unknown(all_nominal_predictors()) %>%
   
   # 2. Create dummy variables
   step_dummy(all_nominal_predictors()) %>%
   
-  # 3. Add just a few key interactions
-  # 1) Doctor’s H1N1 rec × perceived H1N1 risk
-  step_interact(terms = ~ doctor_recc_h1n1:opinion_h1n1_risk) %>%
+  # 3. Only add interactions that make intuitive sense:
   
-  # 2) Doctor’s H1N1 rec × perceived H1N1 efficacy
+  # If doctor recommends AND you think it's effective -> much higher chance
   step_interact(terms = ~ doctor_recc_h1n1:opinion_h1n1_vacc_effective) %>%
   
-  # 3) H1N1 efficacy belief × perceived risk
-  step_interact(terms = ~ opinion_h1n1_vacc_effective:opinion_h1n1_risk) %>%
+  # If you think H1N1 is risky AND doctor recommends -> reinforcement effect
+  step_interact(terms = ~ doctor_recc_h1n1:opinion_h1n1_risk) %>%
   
-  # 4) Doctor’s H1N1 rec × doctor’s seasonal rec (cross-vaccine reinforcement)
-  step_interact(terms = ~ doctor_recc_h1n1:doctor_recc_seasonal) %>%
-  
-  # 5) Seasonal-vax rec × H1N1 efficacy belief (spill-over effect)
-  step_interact(terms = ~ doctor_recc_seasonal:opinion_h1n1_vacc_effective) %>%
-  # 4. Remove zero variance AFTER interactions
+  # 4. Clean up
   step_zv(all_predictors()) %>%
-  
-  # 5. Normalize last
   step_normalize(all_numeric_predictors())
 
 
@@ -120,32 +102,28 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ doctor_recc_h1n1+
 
 
 
-
-seas_recipe <- recipe(seasonal_vaccine ~ opinion_seas_risk+
-                        age_group+
-                        doctor_recc_seasonal+
-                        opinion_h1n1_vacc_effective+
-                        opinion_seas_vacc_effective+  # ADD THIS LINE
-                        opinion_seas_sick_from_vacc+
-                        employment_industry+
-                        health_worker+
-                        education+respondent_id+h1n1_vaccine, data = train_data_seas) %>%
+seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   update_role(respondent_id, new_role = "ID") %>%
-  step_rm(h1n1_vaccine) %>%
-  # 1. Handle missing values FIRST
+  step_rm(h1n1_vaccine) %>%  # Remove target leakage
+  
+  # 1. Handle missing values first
   step_impute_median(all_numeric_predictors()) %>%
   step_unknown(all_nominal_predictors()) %>%
+  
   # 2. Create dummy variables
   step_dummy(all_nominal_predictors()) %>%
-  # 3. Add interactions (now these variables exist)
-  step_interact(terms = ~ opinion_seas_vacc_effective:opinion_seas_risk) %>%
+  
+  # 3. Only the most logical interactions for seasonal vaccine:
+  
+  # If you think seasonal vaccine is effective AND doctor recommends it
   step_interact(terms = ~ opinion_seas_vacc_effective:doctor_recc_seasonal) %>%
-  step_interact(terms = ~ opinion_seas_risk:doctor_recc_seasonal) %>%
-  # 4. Remove zero variance AFTER interactions
+  
+  # If you think seasonal vaccine is effective AND you perceive seasonal risk
+  step_interact(terms = ~ opinion_seas_vacc_effective:opinion_seas_risk) %>%
+  
+  # 4. Clean up
   step_zv(all_predictors()) %>%
-  # 5. Normalize last
   step_normalize(all_numeric_predictors())
-
 # -----------------------------------------------
 # 7. CREATE WORKFLOWS
 # -----------------------------------------------
@@ -351,8 +329,8 @@ mixture_range <- mixture(range = c(0, 1))
 log_grid <- grid_regular(penalty_range, mixture_range, levels = 5)
 
 set.seed(123)
-cv_folds_lr_h1n1 <- vfold_cv(train_data_h1n1, v = 5)
-cv_folds_lr_seas <- vfold_cv(train_data_seas, v = 5)
+cv_folds_lr_h1n1 <- vfold_cv(train_data_h1n1, v = 10)
+cv_folds_lr_seas <- vfold_cv(train_data_seas, v = 10)
 
 
 # Hyperparameter tuning with grid search
