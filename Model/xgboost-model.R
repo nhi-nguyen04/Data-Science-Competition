@@ -10,6 +10,8 @@ library(tune)
 library(future)
 library(vip) # for variable importance
 library(skimr) # Better Overview of the variables
+#install.packages("mlr3tuningspaces")
+library(mlr3tuningspaces) # we need this package to look at which tunning space improve the model
 
 set.seed(6)
 
@@ -395,10 +397,10 @@ plan(multisession, workers = 4)
 
 
 set.seed(214)
-xgb_h1n1_grid <- grid_random(xgb_h1n1_params, size = 50)
+xgb_h1n1_grid <- grid_random(xgb_h1n1_params, size = 100)
 
 set.seed(215)
-xgb_seas_grid <- grid_random(xgb_seas_params, size = 50)
+xgb_seas_grid <- grid_random(xgb_seas_params, size = 100)
 
 
 # Hyperparameter tuning

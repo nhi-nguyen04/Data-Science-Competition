@@ -19,10 +19,6 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   # Normalize numeric columns
   step_normalize(all_numeric_predictors()) # this migth be wrong???????????????????
 
-#the types collum migth show a problem
-h1n1_recipe%>%
-  summary()
-tidy(h1n1_recipe, number = 4)
 
 
 seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
@@ -34,7 +30,6 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   step_zv(all_predictors()) %>% 
   step_normalize(all_numeric_predictors())
 
-tidy(seas_recipe, number = 4)
 
 
 
@@ -42,150 +37,103 @@ tidy(seas_recipe, number = 4)
 
 h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   update_role(respondent_id, new_role = "ID") %>%
-  step_rm(seasonal_vaccine) %>%  # Remove target leakage
+  step_rm(seasonal_vaccine) %>% # Remove target leakage
   
-  # 1. Handle missing values first
+  # 1. Handle missing values first - Order matters!
+  # Impute numericals (median is generally robust for skewed data)
   step_impute_median(all_numeric_predictors()) %>%
+  # Impute nominals (creates a new level 'unknown' for NAs)
   step_unknown(all_nominal_predictors()) %>%
   
-  # 2. Create dummy variables
-  # 29/06/2025
-  #Trees don't need dummy variables or normalization!
-  #In fact, these can make performance worse.
-  #step_dummy(all_nominal_predictors()) %>%
+  # 2. Feature Engineering based on Importance Plot
+  # These are highly influential. Let's create more specific interactions
+  # beyond just pairwise based on the plot insights.
   
-  # 3. Only add interactions that make intuitive sense:
+  # Stronger Interaction: Doctor's H1N1 Rec + Opinion H1N1 Vacc Effective + H1N1 Risk
+  # This combines the top 3 most important features from the plot
+  step_interact(terms = ~ doctor_recc_h1n1:opinion_h1n1_vacc_effective:opinion_h1n1_risk) %>%
   
-  # If doctor recommends AND you think it's effective -> much higher chance
-  step_interact(terms = ~ doctor_recc_h1n1:opinion_h1n1_vacc_effective) %>%
+  # General Pro-Vaccine Stance: Doctor's Seasonal Rec + Opinion Seasonal Vacc Effective
+  # This captures a general inclination towards vaccines, as suggested by their importance for H1N1
+  step_interact(terms = ~ doctor_recc_seasonal:opinion_seas_vacc_effective) %>%
   
-  # If you think H1N1 is risky AND doctor recommends -> reinforcement effect
-  step_interact(terms = ~ doctor_recc_h1n1:opinion_h1n1_risk) %>%
+  # Concern vs. Risk Perception (reinforcement or contradiction)
+  # Captures if high concern translates to high perceived risk.
+  step_interact(terms = ~ h1n1_concern:opinion_h1n1_risk) %>%
+  
+  # Adverse Opinion: If you think you'll get sick from the vaccine (H1N1 or Seasonal)
+  # These were also highly important, but negatively.
+  # We might want a combined "vaccine hesitancy" interaction.
+  step_interact(terms = ~ opinion_h1n1_sick_from_vacc:opinion_seas_sick_from_vacc) %>%
+  
+  # 3. Create dummy variables for all nominal predictors AFTER imputations and interactions
+  # This ensures interaction terms are created from original levels, then dummified.
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>% # one_hot=TRUE is generally preferred for tree models
   
   # 4. Clean up
-  step_zv(all_predictors())
+  step_zv(all_predictors()) %>% # Remove zero-variance predictors
+  # Normalization for tree models is optional, but harmless. Keeping for consistency.
+  step_normalize(all_numeric_predictors())
 
-
-
+# Note: For tree-based models (especially Random Forest and XGBoost),
+# feature selection based on importance can sometimes be beneficial,
+# but it's often better to let the tree model handle it internally unless
+# you have a very high-dimensional dataset or strong overfitting.
+# Given your current features, letting the model prune is usually fine.
 
 
 
 seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   update_role(respondent_id, new_role = "ID") %>%
-  step_rm(h1n1_vaccine) %>%  # Remove target leakage
+  step_rm(h1n1_vaccine) %>% # Remove target leakage
   
   # 1. Handle missing values first
   step_impute_median(all_numeric_predictors()) %>%
   step_unknown(all_nominal_predictors()) %>%
   
-  # 2. Create dummy variables
-  #step_dummy(all_nominal_predictors()) %>%
+  # **CRUCIAL CHANGE: Create dummy variables BEFORE creating interactions**
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
   
-  # 3. Only the most logical interactions for seasonal vaccine:
+  # 2. Feature Engineering - NOW create interactions with the DUMMY VARIABLES
+  #    Note: 'age_group' will now be expanded into 'age_group_X65_.Years', etc.
+  #    You will need to refer to the specific dummy variable columns for interaction,
+  #    or simplify how you express the interaction.
+  #    Let's assume the dummy variables are named like 'age_group_X65_.Years',
+  #    'age_group_18_34.Years', etc., after step_dummy.
   
-  # If you think seasonal vaccine is effective AND doctor recommends it
-  step_interact(terms = ~ opinion_seas_vacc_effective:doctor_recc_seasonal) %>%
+  # Core Seasonal Interaction: Effectiveness + Risk + Doctor Rec
+  # Assuming these were also nominal and now dummified.
+  # If 'opinion_seas_vacc_effective' is still the original column, it might require its own dummification if nominal.
+  # But typically if it's already binary (0/1) or numeric, this is fine.
+  # If they are nominal (like "Strongly Agree", "Disagree"), after step_dummy,
+  # they become things like 'opinion_seas_vacc_effective_StronglyAgree'.
+  # For simplicity, if these are original nominals, we'll interact them and let 'recipes' handle it.
+  # If they become individual dummy columns like 'opinion_seas_vacc_effective_Yes', then we need specific interactions.
   
-  # If you think seasonal vaccine is effective AND you perceive seasonal risk
-  step_interact(terms = ~ opinion_seas_vacc_effective:opinion_seas_risk) %>%
-  # 4. Clean up
-  step_zv(all_predictors())
-
-
-
-
-
-
-
-# -----------------------------------------------
-# ADVANCED TREE-OPTIMIZED RECIPES(Gemini)
-# -----------------------------------------------
-
-
-
-
-
-# ──────────── Possible Interactions ────────────────────
-
-
-# — one interaction per step! —
-# step_interact(terms = ~ doctor_recc_h1n1: h1n1_concern) %>%
-#   step_interact(terms = ~ doctor_recc_h1n1: health_insurance) %>%
-#   step_interact(terms = ~ chronic_med_condition: opinion_h1n1_risk) %>%
-#   step_interact(terms = ~ age_group: child_under_6_months) %>%
-#   step_interact(terms = ~ education: h1n1_knowledge) %>%
-#   step_interact(terms = ~ income_poverty: behavioral_face_mask) %>%
-#   step_interact(terms = ~ race: opinion_h1n1_vacc_effective) %>%
-#   step_interact(terms = ~ health_worker: behavioral_wash_hands) %>%
-#   step_interact(terms = ~ employment_status: behavioral_outside_home) %>%
-#   step_interact(terms = ~ h1n1_knowledge: opinion_h1n1_sick_from_vacc) %>%
-
-
-
-
-
-
-# ──────────── Removal of these Interactions for h1n1 ────────────────────
-
-
-# Remove these “near‐zero” importance features:
-c(
-  "household_adults",      # tiny bar
-  "household_children",
-  grep("^employment_", names(vi_h1n1), value = TRUE),  # both industry & occupation codes
-  "age_group_55-64.Years", # that specific bin is very low
-  "race_White",            # single race dummy with no signal
-  "chronic_med_condition",
-  grep("age_group_", names(train_df), value = TRUE)[-1],  # all other age bins
-  "education_College.Graduate",
-  "child_under_6_months",
-  "income_poverty_<=.75.000", # (and all other income bins)
-  "hhs_geo_region",         # region codes
-  grep("^marital_status", names(train_df), value = TRUE),
-  grep("^rent_or_own", names(train_df), value = TRUE),
-  grep("^behavioral_", names(train_df), value = TRUE),   # all avoidance/hand‐washing/mask‐wearing flags
-  grep("^census_msa", names(train_df), value = TRUE)
-)
-
-
-
-
-
-# ──────────── Removal of these Interactions for seasonal ────────────────────
-
-
-
-to_remove_season <- c(
-  # Very low‐importance demographics & household
-  "household_children",    # tiny bar
-  "household_adults",
-  "age_group_55 - 64 Years",
-  "race White",
-  "sex Male",
-  "education College Graduate",
-  "education Some College",
-  "marital_status Not Married",
-  "rent_or_own Rent",
+  # Let's assume for now that 'opinion_seas_vacc_effective', 'opinion_seas_risk', 'doctor_recc_seasonal'
+  # are either numeric/binary OR 'step_interact' can handle them when they're still nominal
+  # BUT age_group is the tricky one with many levels.
   
-  # Employment & income
-  "employment_status Not in Labor Force",
-  "employment_industry",   # code strings, no signal
-  "employment_occupation", # code strings, no signal
-  "income_poverty Below Poverty",
-  "income_poverty <= $75,000, Above Poverty",
+  # New approach to interactions after step_dummy:
+  # Now you'd typically interact specific dummy variables.
+  # However, if you use the original nominal name in step_interact *after* step_dummy,
+  # 'recipes' will interact *all* the resulting dummy variables from that nominal. This is usually what you want.
   
-  # Behavioral flags
-  "behavioral_wash_hands",
-  "behavioral_outside_home",
-  "behavioral_avoidance",
-  "behavioral_large_gatherings",
+  # Let's keep the `age_group` specific interaction and trust `recipes` to use its dummy versions.
   
-  # Geographics
-  "census_msa MSA, Not Principle City",
-  "census_msa Non-MSA",
-  "hhs_geo_region",        # region codes
+  step_interact(terms = ~ opinion_seas_vacc_effective:opinion_seas_risk:doctor_recc_seasonal) %>%
   
-  # Medical history
-  "chronic_med_condition",
-  "child_under_6_months"
-)
+  # Age Group X65+ specific interactions.
+  # This syntax means: interact all dummy variables created from 'age_group' with 'opinion_seas_vacc_effective'
+  #step_interact(terms = ~ age_group:opinion_seas_vacc_effective) %>%
+  #step_interact(terms = ~ age_group:doctor_recc_seasonal) %>%
+  
+  # Cross-Vaccine Risk Perception + Seasonal Effectiveness
+  step_interact(terms = ~ opinion_h1n1_risk:opinion_seas_vacc_effective) %>%
+  
+  # Overall Vaccine Hesitancy/Negative Experience/Belief
+  step_interact(terms = ~ opinion_seas_sick_from_vacc:opinion_h1n1_sick_from_vacc) %>%
+  
+  # 3. Clean up
+  step_zv(all_predictors()) %>% # Remove zero-variance predictors
+  step_normalize(all_numeric_predictors()) # Optional for tree models, but harmless.

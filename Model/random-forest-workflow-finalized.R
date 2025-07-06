@@ -1,4 +1,5 @@
 # This is a better version of random forest
+#We implemented some changes to reduce run time
 
 
 # -----------------------------------------------
@@ -23,11 +24,11 @@ train_labels   <- read_csv("Data/training_set_labels.csv")
 train_df       <- left_join(train_features, train_labels, by = "respondent_id")
 test_df        <- read_csv("Data/test_set_features.csv")
 
-#glimpse(train_df)
+glimpse(train_df)
 #skim(train_df)
 #View(train_df)
-class(train_df)
-write.csv(train_df, "output.csv", row.names = FALSE)
+#class(train_df)
+#write.csv(train_df, "output.csv", row.names = FALSE)
 # -----------------------------------------------
 # 3. DATA PREPARATION 
 # -----------------------------------------------
@@ -192,6 +193,7 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   # 3. Clean up
   step_zv(all_predictors()) %>% # Remove zero-variance predictors
   step_normalize(all_numeric_predictors()) # Optional for tree models, but harmless.
+
 # -----------------------------------------------
 # 7.WORKFLOWS
 # -----------------------------------------------
@@ -209,11 +211,15 @@ rf_wf_seas <- workflow() %>%
 # -----------------------------------------------
 #Here Training and test dataset are created
 #recipe trained and applied
-rf_h1n1_dt_wkfl_fit <- rf_wf_h1n1 %>% 
-  last_fit(split = data_split_h1n1)
+# rf_h1n1_dt_wkfl_fit <- rf_wf_h1n1 %>% 
+#   last_fit(split = data_split_h1n1)
+# 
+# rf_seas_dt_wkfl_fit <- rf_wf_seas %>% 
+#   last_fit(split = data_split_seas)
+rf_h1n1_dt_wkfl_fit     <- readRDS("Model/results-random-forest/section9_rf_h1n1_dt_wkfl_fit.rds")
+rf_seas_dt_wkfl_fit     <- readRDS("Model/results-random-forest/section9_rf_seas_dt_wkfl_fit.rds")
 
-rf_seas_dt_wkfl_fit <- rf_wf_seas %>% 
-  last_fit(split = data_split_seas)
+
 
 # -----------------------------------------------
 # 9.Model Evaluation -->Calculate performance metrics on test data(20% of the trainning data)
@@ -301,14 +307,15 @@ data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 
 # Fit resamples
-rf_h1n1_dt_rs <- rf_wf_h1n1 %>% 
-  fit_resamples(resamples = h1n1_folds,
-                metrics = data_metrics)
-
-rf_seasonal_dt_rs <- rf_wf_seas %>% 
-  fit_resamples(resamples = seasonal_folds,
-                metrics = data_metrics)
-
+# rf_h1n1_dt_rs <- rf_wf_h1n1 %>% 
+#   fit_resamples(resamples = h1n1_folds,
+#                 metrics = data_metrics)
+# 
+# rf_seasonal_dt_rs <- rf_wf_seas %>% 
+#   fit_resamples(resamples = seasonal_folds,
+#                 metrics = data_metrics)
+rf_h1n1_dt_rs           <- readRDS("Model/results-random-forest/section10_rf_h1n1_dt_rs.rds")
+rf_seasonal_dt_rs       <- readRDS("Model/results-random-forest/section10_rf_seasonal_dt_rs.rds")
 
 # View performance metrics
 
@@ -362,18 +369,24 @@ rf_seasonal_dt_rs_results %>%
 
 #Use this to compare against other model types
 
+
 # -----------------------------------------------
 # 11.Hyperparameter tuning
 # -----------------------------------------------
-# it is adviced that trees should be between 500-1000
-rf_dt_tune_model <- rand_forest(
-  mtry = tune(),
-  min_n = tune(),
-  trees = 500) %>%
-  set_engine("ranger", importance = "impurity") %>%
-  set_mode("classification") 
-
-
+#This is the new updated version
+# 1) Declare the tunable model spec
+rf_dt_tune_model <- 
+  rand_forest(
+    mtry  = tune(),      # will become mtry.ratio
+    min_n = tune(),      # your existing tuning
+    trees = tune()       # tunes num.trees
+  ) %>%
+  set_engine(
+    "ranger",
+    importance      = "impurity",
+    sample.fraction = tune()  # include if you want to tune this
+  ) %>%
+  set_mode("classification")
 
 rf_dt_tune_model
 
@@ -393,9 +406,26 @@ rf_seas_tune_wkfl <- rf_wf_seas %>%
 rf_seas_tune_wkfl
 
 
+
+
+# 2) Build the default parameter set
+rf_params <- parameters(rf_dt_tune_model)
+
+# 3) Override only the ranges you care about
+rf_params <- rf_params %>% update(
+  mtry            = mtry(range = c(0, 1)),          # mtry.ratio in [0,1]
+  trees           = trees(range = c(1, 2000)),      # num.trees in [1,2000]
+  sample.fraction = sample_prop(range = c(0.1, 1))  # sample.fraction in [0.1,1]
+)
+
+# 4) Finalize any data‐dependent settings
+rf_params <- finalize(rf_params, train_data_h1n1)
+
+
+
 # Finalize parameter ranges for both
-rf_h1n1_params  <- finalize(parameters(rf_dt_tune_model), train_data_h1n1)
-rf_seas_params  <- finalize(parameters(rf_dt_tune_model), train_data_seas)
+# rf_h1n1_params  <- finalize(parameters(rf_dt_tune_model), train_data_h1n1)
+# rf_seas_params  <- finalize(parameters(rf_dt_tune_model), train_data_seas)
 
 # Hyperparameter tuning with grid search
 
@@ -404,23 +434,29 @@ plan(multisession, workers = 4)
 
 
 set.seed(214)
-rf_h1n1_grid <- grid_random(rf_h1n1_params, size = 20)
+#Increased grid random from 50 to 60 and about to test to server
+rf_h1n1_grid <- grid_random(rf_params, size = 100)
 
 set.seed(215)
-rf_seas_grid <- grid_random(rf_seas_params, size = 20)
+rf_seas_grid <- grid_random(rf_params, size = 100)
 
 
 # Hyperparameter tuning
-rf_h1n1_dt_tuning <- rf_h1n1_tune_wkfl %>% 
-  tune_grid(resamples = h1n1_folds,
-            grid = rf_h1n1_grid,
-            metrics = data_metrics)
+# rf_h1n1_dt_tuning <- rf_h1n1_tune_wkfl %>% 
+#   tune_grid(resamples = h1n1_folds,
+#             grid = rf_h1n1_grid,
+#             metrics = data_metrics)
+# 
+# 
+# rf_seas_dt_tuning <- rf_seas_tune_wkfl %>% 
+#   tune_grid(resamples = seasonal_folds,
+#             grid = rf_seas_grid,
+#             metrics = data_metrics)
+
+rf_h1n1_dt_tuning       <- readRDS("Model/results-random-forest/section11_rf_h1n1_dt_tuning.rds")
+rf_seas_dt_tuning       <- readRDS("Model/results-random-forest/section11_rf_seas_dt_tuning.rds")
 
 
-rf_seas_dt_tuning <- rf_seas_tune_wkfl %>% 
-  tune_grid(resamples = seasonal_folds,
-            grid = rf_seas_grid,
-            metrics = data_metrics)
 
 # View results
 rf_h1n1_dt_tuning %>% 
@@ -587,4 +623,4 @@ submission_random_forest <- tibble(
 # -----------------------------------------------
 # 20. SAVE SUBMISSION
 # -----------------------------------------------
-write_csv(submission_random_forest, "random_forest_workflow-2.csv")
+#write_csv(submission_random_forest, "random_forest_workflow-2.csv")
