@@ -100,6 +100,10 @@ Looking at the issues, we assigned each member equal tasks to do and finish befo
 After finishing all tasks, we will look at the models again.
 In the next meeting with the professor, we will share our results and ask for feedback.
 
+04/07/2025
+
+Today we are going to optimize tunning spaces together.
+
 
 ## 🏆 Scores:
 
