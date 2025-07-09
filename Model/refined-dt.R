@@ -186,13 +186,18 @@ dt_wf_seas <- workflow() %>%
 # -----------------------------------------------
 # 8.Train the workflow
 # -----------------------------------------------
-dt_h1n1_dt_wkfl_fit <- dt_wf_h1n1 %>% 
-  last_fit(split = data_split_h1n1)
+# dt_h1n1_dt_wkfl_fit <- dt_wf_h1n1 %>% 
+#   last_fit(split = data_split_h1n1)
+# 
+# dt_seas_dt_wkfl_fit <- dt_wf_seas %>% 
+#   last_fit(split = data_split_seas)
+# 
+# saveRDS(dt_h1n1_dt_wkfl_fit, "results/section8_dt_h1n1_dt_wkfl_fit.rds")
+# saveRDS(dt_seas_dt_wkfl_fit, "results/section8_dt_seas_dt_wkfl_fit.rds")
 
-dt_seas_dt_wkfl_fit <- dt_wf_seas %>% 
-  last_fit(split = data_split_seas)
 
-
+dt_h1n1_dt_wkfl_fit     <- readRDS("Model/results/section8_dt_h1n1_dt_wkfl_fit.rds")
+dt_seas_dt_wkfl_fit     <- readRDS("Model/results/section8_dt_seas_dt_wkfl_fit.rds")
 # -----------------------------------------------
 # 9.Calculate performance metrics on test data
 # -----------------------------------------------
@@ -277,14 +282,20 @@ data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 
 # Fit resamples
-dt_h1n1_dt_rs <- dt_wf_h1n1 %>% 
-  fit_resamples(resamples = h1n1_folds,
-                metrics = data_metrics)
+# dt_h1n1_dt_rs <- dt_wf_h1n1 %>% 
+#   fit_resamples(resamples = h1n1_folds,
+#                 metrics = data_metrics)
+# 
+# dt_seasonal_dt_rs <- dt_wf_seas %>% 
+#   fit_resamples(resamples = seasonal_folds,
+#                 metrics = data_metrics)
+# 
+# saveRDS(dt_h1n1_dt_rs, "results/section10_dt_h1n1_dt_rs.rds")
+# saveRDS(dt_seasonal_dt_rs, "results/section10_dt_seasonal_dt_rs.rds")
 
-dt_seasonal_dt_rs <- dt_wf_seas %>% 
-  fit_resamples(resamples = seasonal_folds,
-                metrics = data_metrics)
 
+dt_h1n1_dt_rs           <- readRDS("Model/results/section10_dt_h1n1_dt_rs.rds")
+dt_seasonal_dt_rs       <- readRDS("Model/results/section10_dt_seasonal_dt_rs.rds")
 
 # View performance metrics
 
@@ -365,25 +376,31 @@ set.seed(214)
 #This is way too small! With only 10 combinations for 3 hyperparameters, 
 #you're barely scratching the surface. For bagged trees, you should use at least 50-100 combinations
 
-dt_h1n1_grid <- grid_random(dt_h1n1_params, size = 50)
+dt_h1n1_grid <- grid_random(dt_h1n1_params, size = 100)
 
 set.seed(215)
-dt_seas_grid <- grid_random(dt_seas_params, size = 50)
+dt_seas_grid <- grid_random(dt_seas_params, size = 100)
 
 
 
 # Hyperparameter tuning
-dt_h1n1_dt_tuning <- dt_h1n1_tune_wkfl %>% 
-  tune_grid(resamples = h1n1_folds,
-            grid = dt_h1n1_grid,
-            metrics = data_metrics)
+# dt_h1n1_dt_tuning <- dt_h1n1_tune_wkfl %>% 
+#   tune_grid(resamples = h1n1_folds,
+#             grid = dt_h1n1_grid,
+#             metrics = data_metrics)
+# 
+# 
+# dt_seas_dt_tuning <- dt_seas_tune_wkfl %>% 
+#   tune_grid(resamples = seasonal_folds,
+#             grid = dt_seas_grid,
+#             metrics = data_metrics)
+# 
+# saveRDS(dt_h1n1_dt_tuning, "results/section11_dt_h1n1_dt_tuning.rds")
+# saveRDS(dt_seas_dt_tuning, "results/section11_dt_seas_dt_tuning.rds")
 
 
-dt_seas_dt_tuning <- dt_seas_tune_wkfl %>% 
-  tune_grid(resamples = seasonal_folds,
-            grid = dt_seas_grid,
-            metrics = data_metrics)
-
+dt_h1n1_dt_tuning       <- readRDS("Model/results/section11_dt_h1n1_dt_tuning.rds")
+dt_seas_dt_tuning       <- readRDS("Model/results/section11_dt_seas_dt_tuning.rds")
 
 # View results
 dt_h1n1_dt_tuning %>% 

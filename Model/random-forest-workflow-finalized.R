@@ -211,13 +211,17 @@ rf_wf_seas <- workflow() %>%
 # -----------------------------------------------
 #Here Training and test dataset are created
 #recipe trained and applied
-# rf_h1n1_dt_wkfl_fit <- rf_wf_h1n1 %>% 
+
+# rf_h1n1_dt_wkfl_fit <- rf_wf_h1n1 %>%
 #   last_fit(split = data_split_h1n1)
 # 
-# rf_seas_dt_wkfl_fit <- rf_wf_seas %>% 
+# rf_seas_dt_wkfl_fit <- rf_wf_seas %>%
 #   last_fit(split = data_split_seas)
-rf_h1n1_dt_wkfl_fit     <- readRDS("Model/results-random-forest/section9_rf_h1n1_dt_wkfl_fit.rds")
-rf_seas_dt_wkfl_fit     <- readRDS("Model/results-random-forest/section9_rf_seas_dt_wkfl_fit.rds")
+
+# saveRDS(rf_h1n1_dt_wkfl_fit, "results/section8_rf_h1n1_dt_wkfl_fit.rds")
+# saveRDS(rf_seas_dt_wkfl_fit, "results/section8_rf_seas_dt_wkfl_fit.rds")
+rf_h1n1_dt_wkfl_fit     <- readRDS("Model/results/section8_rf_h1n1_dt_wkfl_fit.rds")
+rf_seas_dt_wkfl_fit     <- readRDS("Model/results/section8_rf_seas_dt_wkfl_fit.rds")
 
 
 
@@ -307,15 +311,19 @@ data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 
 # Fit resamples
-# rf_h1n1_dt_rs <- rf_wf_h1n1 %>% 
+# rf_h1n1_dt_rs <- rf_wf_h1n1 %>%
 #   fit_resamples(resamples = h1n1_folds,
 #                 metrics = data_metrics)
 # 
-# rf_seasonal_dt_rs <- rf_wf_seas %>% 
+# rf_seasonal_dt_rs <- rf_wf_seas %>%
 #   fit_resamples(resamples = seasonal_folds,
 #                 metrics = data_metrics)
-rf_h1n1_dt_rs           <- readRDS("Model/results-random-forest/section10_rf_h1n1_dt_rs.rds")
-rf_seasonal_dt_rs       <- readRDS("Model/results-random-forest/section10_rf_seasonal_dt_rs.rds")
+
+# saveRDS(rf_h1n1_dt_rs, "results/section10_rf_h1n1_dt_rs.rds")
+# saveRDS(rf_seasonal_dt_rs, "results/section10_rf_seasonal_dt_rs.rds")
+
+rf_h1n1_dt_rs           <- readRDS("Model/results/section10_rf_h1n1_dt_rs.rds")
+rf_seasonal_dt_rs       <- readRDS("Model/results/section10_rf_seasonal_dt_rs.rds")
 
 # View performance metrics
 
@@ -419,9 +427,8 @@ rf_params <- rf_params %>% update(
 )
 
 # 4) Finalize any data‐dependent settings
-rf_params <- finalize(rf_params, train_data_h1n1)
-
-
+rf_h1n1_params <- finalize(rf_params, train_data_h1n1)
+rf_seas_params <- finalize(rf_params, train_data_seas)
 
 # Finalize parameter ranges for both
 # rf_h1n1_params  <- finalize(parameters(rf_dt_tune_model), train_data_h1n1)
@@ -435,26 +442,34 @@ plan(multisession, workers = 4)
 
 set.seed(214)
 #Increased grid random from 50 to 60 and about to test to server
-rf_h1n1_grid <- grid_random(rf_params, size = 100)
+rf_h1n1_grid <- grid_random(rf_h1n1_params, size = 100)
 
 set.seed(215)
-rf_seas_grid <- grid_random(rf_params, size = 100)
+rf_seas_grid <- grid_random(rf_seas_params, size = 100)
 
+
+ctrl_grid <- control_stack_grid()      # for tune_grid()
+ctrl_res <- control_stack_resamples()  # for fit_resamples()
 
 # Hyperparameter tuning
-# rf_h1n1_dt_tuning <- rf_h1n1_tune_wkfl %>% 
+# rf_h1n1_dt_tuning <- rf_h1n1_tune_wkfl %>%
 #   tune_grid(resamples = h1n1_folds,
 #             grid = rf_h1n1_grid,
-#             metrics = data_metrics)
+#             metrics = data_metrics,
+#             control = control_stack_grid())
 # 
 # 
-# rf_seas_dt_tuning <- rf_seas_tune_wkfl %>% 
+# rf_seas_dt_tuning <- rf_seas_tune_wkfl %>%
 #   tune_grid(resamples = seasonal_folds,
 #             grid = rf_seas_grid,
-#             metrics = data_metrics)
+#             metrics = data_metrics,
+#             control = control_stack_grid())
 
-rf_h1n1_dt_tuning       <- readRDS("Model/results-random-forest/section11_rf_h1n1_dt_tuning.rds")
-rf_seas_dt_tuning       <- readRDS("Model/results-random-forest/section11_rf_seas_dt_tuning.rds")
+# saveRDS(rf_h1n1_dt_tuning, "results/section11_rf_h1n1_dt_tuning.rds")
+# saveRDS(rf_seas_dt_tuning, "results/section11_rf_seas_dt_tuning.rds")
+
+rf_h1n1_dt_tuning       <- readRDS("Model/results/section11_rf_h1n1_dt_tuning.rds")
+rf_seas_dt_tuning       <- readRDS("Model/results/section11_rf_seas_dt_tuning.rds")
 
 
 

@@ -374,8 +374,8 @@ lr_seas_tune_wkfl
 
 
 
-
-penalty_range <- penalty(range = c(-4, 1))  # log scale
+#we went from range(-4,1) to this
+penalty_range <- penalty(range = c(-4, 4))  # log scale
 mixture_range <- mixture(range = c(0, 1))
 
 log_grid <- grid_regular(penalty_range, mixture_range, levels = 5)

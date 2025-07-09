@@ -8,6 +8,7 @@ library(tune)
 library(future)
 library(vip) # for variable importance
 library(skimr)
+library(stacks)
 set.seed(6)
 
 # -----------------------------------------------
@@ -182,13 +183,19 @@ bt_wf_seas <- workflow() %>%
 # -----------------------------------------------
 # 8.Train the workflow
 # -----------------------------------------------
-bt_h1n1_dt_wkfl_fit <- bt_wf_h1n1 %>% 
-  last_fit(split = data_split_h1n1)
+# bt_h1n1_dt_wkfl_fit <- bt_wf_h1n1 %>% 
+#   last_fit(split = data_split_h1n1)
+# 
+# 
+# bt_seas_dt_wkfl_fit <- bt_wf_seas %>% 
+#   last_fit(split = data_split_seas)
+# 
+# saveRDS(bt_h1n1_dt_wkfl_fit, "results/section8_bt_h1n1_dt_wkfl_fit.rds")
+# saveRDS(bt_seas_dt_wkfl_fit, "results/section8_bt_seas_dt_wkfl_fit.rds")
 
 
-bt_seas_dt_wkfl_fit <- bt_wf_seas %>% 
-  last_fit(split = data_split_seas)
-
+bt_h1n1_dt_wkfl_fit     <- readRDS("Model/results/section8_bt_h1n1_dt_wkfl_fit.rds")
+bt_seas_dt_wkfl_fit     <- readRDS("Model/results/section8_bt_seas_dt_wkfl_fit.rds")
 
 # -----------------------------------------------
 # 9.Model Evaluation -->Calculate performance metrics on test data(20% of the trainning data)
@@ -279,13 +286,21 @@ data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 
 # Fit resamples
-bt_h1n1_dt_rs <- bt_wf_h1n1 %>% 
-  fit_resamples(resamples = h1n1_folds,
-                metrics = data_metrics)
+# bt_h1n1_dt_rs <- bt_wf_h1n1 %>% 
+#   fit_resamples(resamples = h1n1_folds,
+#                 metrics = data_metrics)
+# 
+# bt_seasonal_dt_rs <- bt_wf_seas %>% 
+#   fit_resamples(resamples = seasonal_folds,
+#                 metrics = data_metrics)
+# 
+# 
+# saveRDS(bt_h1n1_dt_rs, "results/section10_bt_h1n1_dt_rs.rds")
+# saveRDS(bt_seasonal_dt_rs, "results/section10_bt_seasonal_dt_rs.rds")
 
-bt_seasonal_dt_rs <- bt_wf_seas %>% 
-  fit_resamples(resamples = seasonal_folds,
-                metrics = data_metrics)
+
+bt_h1n1_dt_rs           <- readRDS("Model/results/section10_bt_h1n1_dt_rs.rds")
+bt_seasonal_dt_rs       <- readRDS("Model/results/section10_bt_seasonal_dt_rs.rds")
 
 
 # View performance metrics
@@ -324,13 +339,14 @@ bt_rs_perf_seas <- bt_seasonal_dt_rs_results %>%
 # -----------------------------------------------
 # 11.Hyperparameter tuning
 # -----------------------------------------------
+# Define the model with tunable parameters
 bt_dt_tune_model <- bag_tree(cost_complexity = tune(),
-                         tree_depth = tune(),
-                         min_n = tune()) %>%
+                             tree_depth = tune(),
+                             min_n = tune()) %>%
   set_engine("rpart", times = 20) %>%
   set_mode("classification") 
-  
-  
+
+
 
 bt_dt_tune_model
 
@@ -363,22 +379,36 @@ plan(multisession, workers = 4)
 
 
 set.seed(214)
-bt_h1n1_grid <- grid_random(bt_h1n1_params, size = 50)
+bt_h1n1_grid <- grid_random(bt_h1n1_params, size = 100)
 
 set.seed(215)
-bt_seas_grid <- grid_random(bt_seas_params, size = 50)
+bt_seas_grid <- grid_random(bt_seas_params, size = 100)
+
+
+ctrl_grid <- control_stack_grid()      # for tune_grid()
+ctrl_res <- control_stack_resamples()  # for fit_resamples()
 
 # Hyperparameter tuning
-bt_h1n1_dt_tuning <- bt_h1n1_tune_wkfl %>% 
-  tune_grid(resamples = h1n1_folds,
-            grid = bt_h1n1_grid,
-            metrics = data_metrics)
+# bt_h1n1_dt_tuning <- bt_h1n1_tune_wkfl %>% 
+#   tune_grid(resamples = h1n1_folds,
+#             grid = bt_h1n1_grid,
+#             metrics = data_metrics,
+#             control = control_stack_grid())
+# 
+# 
+# bt_seas_dt_tuning <- bt_seas_tune_wkfl %>% 
+#   tune_grid(resamples = seasonal_folds,
+#             grid = bt_seas_grid,
+#             metrics = data_metrics,
+#             control = control_stack_grid())
+# 
+# 
+# saveRDS(bt_h1n1_dt_tuning, "results/section11_bt_h1n1_dt_tuning.rds")
+# saveRDS(bt_seas_dt_tuning, "results/section11_bt_seas_dt_tuning.rds")
 
 
-bt_seas_dt_tuning <- bt_seas_tune_wkfl %>% 
-  tune_grid(resamples = seasonal_folds,
-            grid = bt_seas_grid,
-            metrics = data_metrics)
+bt_h1n1_dt_tuning       <- readRDS("Model/results/section11_bt_h1n1_dt_tuning.rds")
+bt_seas_dt_tuning       <- readRDS("Model/results/section11_bt_seas_dt_tuning.rds")
 
 
 # View results

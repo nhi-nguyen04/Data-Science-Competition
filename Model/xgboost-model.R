@@ -10,8 +10,9 @@ library(tune)
 library(future)
 library(vip) # for variable importance
 library(skimr) # Better Overview of the variables
+library(stacks)
 #install.packages("mlr3tuningspaces")
-library(mlr3tuningspaces) # we need this package to look at which tunning space improve the model
+#library(mlr3tuningspaces) # we need this package to look at which tunning space improve the model
 
 set.seed(6)
 
@@ -36,7 +37,7 @@ train_df <- train_df %>%
 
 
 # this gives us a break down of the variables in the dataset
-skim(train_df)
+#skim(train_df)
 
 # IDENTIFY NUMERIC VS. CATEGORICAL BY TYPE
 # (Rather than manually listing variable names)
@@ -125,11 +126,11 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
 # you have a very high-dimensional dataset or strong overfitting.
 # Given your current features, letting the model prune is usually fine.
 
-prepped_rec <- prep(h1n1_recipe, training = train_data_h1n1)
-
-# 2. Extract the processed training set
-View(juice(prepped_rec))
-glimpse(juice(prepped_rec))
+# prepped_rec <- prep(h1n1_recipe, training = train_data_h1n1)
+# 
+# # 2. Extract the processed training set
+# View(juice(prepped_rec))
+# glimpse(juice(prepped_rec))
 
 
 
@@ -205,12 +206,19 @@ xgb_wf_seas <- workflow() %>%
 # -----------------------------------------------
 # 8.Train the workflow
 # -----------------------------------------------
-xgb_h1n1_dt_wkfl_fit <- xgb_wf_h1n1 %>% 
-  last_fit(split = data_split_h1n1)
+# xgb_h1n1_dt_wkfl_fit <- xgb_wf_h1n1 %>% 
+#   last_fit(split = data_split_h1n1)
+# 
+# xgb_seas_dt_wkfl_fit <- xgb_wf_seas %>% 
+#   last_fit(split = data_split_seas)
+# 
+# 
+# saveRDS(xgb_h1n1_dt_wkfl_fit, "results/section8_xgb_h1n1_dt_wkfl_fit.rds")
+# saveRDS(xgb_seas_dt_wkfl_fit, "results/section8_xgb_seas_dt_wkfl_fit.rds")
 
-xgb_seas_dt_wkfl_fit <- xgb_wf_seas %>% 
-  last_fit(split = data_split_seas)
 
+xgb_h1n1_dt_wkfl_fit     <- readRDS("Model/results/section8_xgb_h1n1_dt_wkfl_fit.rds")
+xgb_seas_dt_wkfl_fit     <- readRDS("Model/results/section8_xgb_seas_dt_wkfl_fit.rds")
 
 # -----------------------------------------------
 # 9.Calculate performance metrics on test data
@@ -310,14 +318,21 @@ data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 
 # Fit resamples
-xgb_h1n1_dt_rs <- xgb_wf_h1n1 %>% 
-  fit_resamples(resamples = h1n1_folds,
-                metrics = data_metrics)
+# xgb_h1n1_dt_rs <- xgb_wf_h1n1 %>% 
+#   fit_resamples(resamples = h1n1_folds,
+#                 metrics = data_metrics)
+# 
+# xgb_seasonal_dt_rs <- xgb_wf_seas %>% 
+#   fit_resamples(resamples = seasonal_folds,
+#                 metrics = data_metrics)
+# 
+# 
+# 
+# saveRDS(xgb_h1n1_dt_rs, "results/section10_xgb_h1n1_dt_rs.rds")
+# saveRDS(xgb_seasonal_dt_rs, "results/section10_xgb_seasonal_dt_rs.rds")
 
-xgb_seasonal_dt_rs <- xgb_wf_seas %>% 
-  fit_resamples(resamples = seasonal_folds,
-                metrics = data_metrics)
-
+xgb_h1n1_dt_rs           <- readRDS("Model/results/section10_xgb_h1n1_dt_rs.rds")
+xgb_seasonal_dt_rs       <- readRDS("Model/results/section10_xgb_seasonal_dt_rs.rds")
 
 # View performance metrics
 
@@ -357,15 +372,17 @@ xgb_seasonal_dt_rs_results %>%
 # -----------------------------------------------
 # 11.Hyperparameter tuning
 # -----------------------------------------------
-# it is adviced that trees should be between 500-1000
-xgb_dt_tune_model <- boost_tree(
-  learn_rate = tune(),
-  tree_depth = tune(),
-  trees = 500, 
-  sample_size = tune()) %>%
-  set_engine("xgboost") %>%
-  set_mode("classification") 
-
+xgb_dt_tune_model <- 
+  boost_tree(
+    trees       = tune(),    # nrounds ∈ [1, 5000]
+    tree_depth  = tune(),    # max_depth ∈ [1, 20]
+    learn_rate  = tune(),    # eta ∈ [1e−4, 1], log-scale
+    sample_size = tune()     # subsample ∈ [0.1, 1]
+  ) %>%
+  set_engine(
+    "xgboost",
+  ) %>%
+  set_mode("classification")
 
 
 xgb_dt_tune_model
@@ -386,9 +403,22 @@ xgb_seas_tune_wkfl <- xgb_wf_seas %>%
 xgb_seas_tune_wkfl
 
 
+xgb_params <- parameters(
+  trees(range = c(1L, 5000L)),                                    # nrounds
+  tree_depth(range = c(1L, 20L)),                                 # max_depth
+  learn_rate(range = c(1e-4, 1), trans = scales::log10_trans()),  # eta
+  sample_prop(range = c(0.1, 1))                                  # subsample
+)
+# 4) Finalize any data-dependent params (like mtry for RF; not strictly needed here,
+#    but good practice if you ever tune something that depends on # predictors)
+xgb_h1n1_params <- finalize(xgb_params, train_data_h1n1)
+xgb_seas_params <- finalize(xgb_params, train_data_seas)
+
+
+
 # Finalize parameter ranges for both
-xgb_h1n1_params  <- finalize(parameters(xgb_dt_tune_model), train_data_h1n1)
-xgb_seas_params  <- finalize(parameters(xgb_dt_tune_model), train_data_seas)
+# xgb_h1n1_params  <- finalize(parameters(xgb_dt_tune_model), train_data_h1n1)
+# xgb_seas_params  <- finalize(parameters(xgb_dt_tune_model), train_data_seas)
 
 # Hyperparameter tuning with grid search
 
@@ -403,17 +433,32 @@ set.seed(215)
 xgb_seas_grid <- grid_random(xgb_seas_params, size = 100)
 
 
+ctrl_grid <- control_stack_grid()      # for tune_grid()
+ctrl_res <- control_stack_resamples()  # for fit_resamples()
+
 # Hyperparameter tuning
-xgb_h1n1_dt_tuning <- xgb_h1n1_tune_wkfl %>% 
-  tune_grid(resamples = h1n1_folds,
-            grid = xgb_h1n1_grid,
-            metrics = data_metrics)
+# xgb_h1n1_dt_tuning <- xgb_h1n1_tune_wkfl %>% 
+#   tune_grid(resamples = h1n1_folds,
+#             grid = xgb_h1n1_grid,
+#             metrics = data_metrics,
+#             control = control_stack_grid())
+# 
+# 
+# xgb_seas_dt_tuning <- xgb_seas_tune_wkfl %>% 
+#   tune_grid(resamples = seasonal_folds,
+#             grid = xgb_seas_grid,
+#             metrics = data_metrics,
+#             control = control_stack_grid())
+# 
+# 
+# 
+# saveRDS(xgb_h1n1_dt_tuning, "results/section11_xgb_h1n1_dt_tuning.rds")
+# saveRDS(xgb_seas_dt_tuning, "results/section11_xgb_seas_dt_tuning.rds")
+
+xgb_h1n1_dt_tuning       <- readRDS("Model/results/section11_xgb_h1n1_dt_tuning.rds")
+xgb_seas_dt_tuning       <- readRDS("Model/results/section11_xgb_seas_dt_tuning.rds")
 
 
-xgb_seas_dt_tuning <- xgb_seas_tune_wkfl %>% 
-  tune_grid(resamples = seasonal_folds,
-            grid = xgb_seas_grid,
-            metrics = data_metrics)
 
 
 # View results

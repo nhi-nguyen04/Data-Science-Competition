@@ -4,37 +4,37 @@ library(yardstick)
 
 
 
-
-ctrl_grid <- control_stack_grid()      # for tune_grid()
-ctrl_res <- control_stack_resamples()  # for fit_resamples()
-
-
-rf_h1n1_stack <- rf_h1n1_tune_wkfl %>% 
-  tune_grid(resamples = h1n1_folds,
-            grid = rf_h1n1_grid,
-            metrics = data_metrics,
-            control = control_stack_grid())
-
-
-rf_seas_dt_stack <- rf_seas_tune_wkfl %>% 
-  tune_grid(resamples = seasonal_folds,
-            grid = rf_seas_grid,
-            metrics = data_metrics,
-            control = control_stack_grid())
-
-
-xgb_h1n1_dt_stack <- xgb_h1n1_tune_wkfl %>% 
-  tune_grid(resamples = h1n1_folds,
-            grid = xgb_h1n1_grid,
-            metrics = data_metrics,
-            control = control_stack_grid())
-
-
-xgb_seas_dt_stack <- xgb_seas_tune_wkfl %>% 
-  tune_grid(resamples = seasonal_folds,
-            grid = xgb_seas_grid,
-            metrics = data_metrics,
-            control = control_stack_grid())
+# 
+# ctrl_grid <- control_stack_grid()      # for tune_grid()
+# ctrl_res <- control_stack_resamples()  # for fit_resamples()
+# 
+# 
+# rf_h1n1_stack <- rf_h1n1_tune_wkfl %>% 
+#   tune_grid(resamples = h1n1_folds,
+#             grid = rf_h1n1_grid,
+#             metrics = data_metrics,
+#             control = control_stack_grid())
+# 
+# 
+# rf_seas_dt_stack <- rf_seas_tune_wkfl %>% 
+#   tune_grid(resamples = seasonal_folds,
+#             grid = rf_seas_grid,
+#             metrics = data_metrics,
+#             control = control_stack_grid())
+# 
+# 
+# xgb_h1n1_dt_stack <- xgb_h1n1_tune_wkfl %>% 
+#   tune_grid(resamples = h1n1_folds,
+#             grid = xgb_h1n1_grid,
+#             metrics = data_metrics,
+#             control = control_stack_grid())
+# 
+# 
+# xgb_seas_dt_stack <- xgb_seas_tune_wkfl %>% 
+#   tune_grid(resamples = seasonal_folds,
+#             grid = xgb_seas_grid,
+#             metrics = data_metrics,
+#             control = control_stack_grid())
 
 
 # ——— 1. STACK H1N1 TUNED RESULTS ———
