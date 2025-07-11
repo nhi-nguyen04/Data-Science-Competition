@@ -36,11 +36,21 @@ library(yardstick)
 #             metrics = data_metrics,
 #             control = control_stack_grid())
 
+lr_h1n1_stack_rs <- lr_final_h1n1_tune_wkfl %>%
+  fit_resamples(resamples = h1n1_folds, metrics = data_metrics, control = control_stack_grid())
+
+lr_seas_stack_rs <- lr_final_seas_tune_wkfl %>%
+  fit_resamples(resamples = seasonal_folds, metrics = data_metrics, control = control_stack_grid())
+
+
+
+
 
 # ——— 1. STACK H1N1 TUNED RESULTS ———
 h1n1_stack <- stacks() %>%
-  add_candidates(xgb_h1n1_dt_stack) %>%
-  add_candidates(rf_h1n1_stack) %>%
+ # add_candidates(xgb_h1n1_dt_tuning) %>%
+  add_candidates(rf_h1n1_dt_tuning) %>%
+  add_candidates(lr_h1n1_stack_rs) %>%
   blend_predictions() %>%
   fit_members()
 
@@ -56,8 +66,9 @@ h1n1_eval_preds %>%
 
 # ——— 2. STACK SEASONAL TUNED RESULTS ———
 seas_stack <- stacks() %>%
-  add_candidates(xgb_seas_dt_stack) %>%
-  add_candidates(rf_seas_dt_stack) %>%
+ # add_candidates(xgb_seas_dt_tuning) %>%
+  add_candidates(rf_seas_dt_tuning) %>%
+  add_candidates(lr_seas_stack_rs) %>%
   blend_predictions() %>%
   fit_members()
 
@@ -78,4 +89,4 @@ submission_stacked <- tibble(
   seasonal_vaccine  = final_preds_seas_stack
 )
 
-write_csv(submission_stacked, "stacked_trees_submission.csv")
+write_csv(submission_stacked, "stacked_trees_xgb_lr_rf_submission.csv")
