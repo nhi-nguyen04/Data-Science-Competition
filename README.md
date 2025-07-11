@@ -46,11 +46,23 @@ The competition uses **Area Under the ROC Curve (AUC-ROC)** as the evaluation me
 │ └── explorative data analysis.R
 ├── Model/
 │ └── Model.Rmd
-│ └── bagged_trees_model.R
+│ └── ensemble-stack.R
+│ └── testing-Model-Comparison
+│ └── best-comparison.R
+│ └── LightGBM-Workflow.R
+│ └── catboost.R
+│ └── testing.R
+│ └── Comparison.R
 │ └── base-model.R
-│ └── random-forest-workflow-finalized.R
+│ └── bagged_trees_model.R
 │ └── refined-dt.R
 │ └── xgboost-model.R
+│ └── random-forest-workflow-finalized.R
+│ └── new-recipe/
+│ └── ── recipes.R
+│ └── ── bs-model.R
+│ └── results/
+│ └── ── xxx.rds
 ├── Submissions/
 │ └── bagged_tree_workflow.csv
 │ └── finalized_dt_workflow.csv
