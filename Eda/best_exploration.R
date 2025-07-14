@@ -34,8 +34,8 @@ theme_set(custom_theme)
 
 # correct color mapping
 vaccine_colors <- c(
-  "Not Vaccinated" = "#E15759",
-  "Vaccinated"     = "#4E79A7"
+  "Not Vaccinated" = "#F1C45F",
+  "Vaccinated"     = "#1B80BB"
 )
 
 # -----------------------------------------------
@@ -154,7 +154,7 @@ features_df %>%
 # plot function
 create_vaccine_plot <- function(data, vaccine_type) {
   var_name <- paste0(vaccine_type, "_vaccine")
-  title    <- sprintf("%s Vaccination Status",
+  title    <- sprintf("%s Vaccination Rates",
                       tools::toTitleCase(vaccine_type))
   n_obs    <- nrow(data)
   
@@ -170,13 +170,9 @@ create_vaccine_plot <- function(data, vaccine_type) {
     ) %>%
     ggplot(aes(x = vaccine, y = proportion, fill = vaccine)) +
     geom_col(width = 0.6) +
-    geom_text(aes(label = paste0(round(proportion,1), "%")),
-              position = position_stack(vjust = 0.5),
-              color = "white", fontface = "bold") +
     scale_fill_manual(values = vaccine_colors) +
     labs(
-      title    = title,
-      subtitle = paste("Distribution of", title),
+#      title    = title,
       y        = "Percentage (%)",
       x        = NULL
     ) +
@@ -189,18 +185,25 @@ create_vaccine_plot <- function(data, vaccine_type) {
 # -----------------------------------------------
 
 # create the plots  & combine them
-plot_h1n1     <- create_vaccine_plot(labels_df, "h1n1")
-plot_seasonal <- create_vaccine_plot(labels_df, "seasonal")
+plot_h1n1 <- create_vaccine_plot(labels_df, "h1n1") +
+  ggtitle("H1N1 Vaccination Rates")
+plot_seasonal <- create_vaccine_plot(labels_df, "seasonal") +
+  ylab(NULL) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  ggtitle("Seasonal Vaccination Rates")
 
 vaccine_plots <- plot_h1n1 + plot_seasonal +
   plot_layout(ncol = 2, guides = "collect") +
   plot_annotation(
     title = "Vaccination Rates for H1N1 and Seasonal Flu",
-    theme = theme(plot.title = element_text(size = 16, face = "bold",
+    theme = theme(plot.title = element_text(size = 15, face = "bold",
                                             hjust = 0.5))
   )
 
 vaccine_plots
+
+
 # -----------------------------------------------
 # 6. OBSERVATION OF VACCINATION RATE PLOT 
 # -----------------------------------------------
@@ -255,7 +258,7 @@ cross_tab_df$Label <- paste0(cross_tab_df$Count, "\n(", round(cross_tab_df$Perce
 
 # Create heatmap we need
 heatmap_plot <- ggplot(cross_tab_df, aes(x = Seasonal, y = H1N1, fill = Percentage)) +
-  geom_tile(color = "white", size = 0.5) +
+  geom_tile(color = "white", size = 0.5, lwd = 1.5, linetype = 1) +
   geom_text(aes(label = Label), color = "white", fontface = "bold", linewidth = 4) +
   scale_fill_viridis_c(option = "D", direction = -1) +
   labs(
@@ -264,7 +267,8 @@ heatmap_plot <- ggplot(cross_tab_df, aes(x = Seasonal, y = H1N1, fill = Percenta
                      round(cor(labels_df$h1n1_vaccine, labels_df$seasonal_vaccine), 3)),
     fill = "Percentage (%)"
   ) +
-  coord_fixed()
+  coord_fixed() +
+  scale_fill_gradient(low = "gray", high = "#6E7FC2")
 
 #------------------------------
 # 8.  CROSS-TABULATION ANALYSIS VISUALIZATION
@@ -452,14 +456,14 @@ vaccination_rate_plot <- function(col, target, data, title = NULL, thresh = 10) 
       fill = target_label
     )) +
       geom_col(width = 0.7) +
-      geom_text(
-        data = filter(counts, !!sym(target) == 1),
-        aes(label = paste0(round(percentage, 1), "%")),
-        position = position_stack(vjust = 0.5),
-        color = "white",
-        fontface = "bold",
-        size = 3
-      ) +
+      # geom_text(
+      #   data = filter(counts, !!sym(target) == 1),
+      #   aes(label = paste0(round(percentage, 1), "%")),
+      #   position = position_stack(vjust = 0.5),
+      #   color = "white",
+      #   fontface = "bold",
+      #   size = 3
+      # ) +
       scale_fill_manual(values = vaccine_colors) +
       # Only show levels that exist in the data
       scale_y_discrete(drop = TRUE) +
@@ -509,7 +513,7 @@ cols_to_plot <- c(
   "education"
 )
 
-#Better naming of varibale here
+#Better naming of variable here
 for (col in cols_to_plot) {
   pretty <- tools::toTitleCase(gsub("_"," ",col))
   t1 <- paste("H1N1 Vaccination Rate by", pretty)
@@ -522,8 +526,10 @@ for (col in cols_to_plot) {
 # Here you can just pick a feature you are interested in looking
 #since h1n1_plots is list
 #up to you man
-h1n1_list_plots <- (h1n1_plots$h1n1_concern + h1n1_plots$h1n1_knowledge ) /
-  (h1n1_plots$opinion_h1n1_vacc_effective + h1n1_plots$age_group ) +
+h1n1_list_plots <- (h1n1_plots$h1n1_concern + ggtitle("H1N1 Vaccination Rate by H1N1 Concern") +
+                      h1n1_plots$h1n1_knowledge + ggtitle("H1N1 Vaccination Rate by H1N1 Concern")) /
+  (h1n1_plots$opinion_h1n1_vacc_effective + ggtitle("H1N1 Vaccination Rate by Opinion on Effectiveness") +
+     h1n1_plots$age_group ) +
   plot_layout(guides = "collect") +
   plot_annotation(
     title = "Key Factors Influencing H1N1 Vaccination",
@@ -532,8 +538,8 @@ h1n1_list_plots <- (h1n1_plots$h1n1_concern + h1n1_plots$h1n1_knowledge ) /
 
 h1n1_list_plots
 
-seasonal_list_plots <- (seasonal_plots$h1n1_concern +
-                             seasonal_plots$opinion_seas_risk) /
+seasonal_list_plots <- (seasonal_plots$h1n1_concern + ggtitle("Seasonal Vaccination Rate by H1N1 Concern") +
+                             seasonal_plots$opinion_seas_risk + ggtitle("Seasonal Vaccination Rate by Opinion on Risk")) /
   (seasonal_plots$age_group + seasonal_plots$education) +
   plot_layout(guides = "collect") +
   plot_annotation(
