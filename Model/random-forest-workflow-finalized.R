@@ -13,6 +13,7 @@ library(future)
 library(vip) # for variable importance
 library(skimr)
 library(stacks)
+library(kableExtra)
 set.seed(6)
 
 
@@ -38,6 +39,8 @@ train_df <- train_df %>%
     seasonal_vaccine = factor(seasonal_vaccine, levels = c(1, 0))
   )
 
+
+
 # IDENTIFY NUMERIC VS. CATEGORICAL BY TYPE
 # (Rather than manually listing variable names)
 # First, convert any integer‐coded categories to factor *if* they’re not already numeric
@@ -59,6 +62,7 @@ categorical_vars <- setdiff(categorical_vars, c("respondent_id", "h1n1_vaccine",
 data_split_h1n1 <- initial_split(train_df, prop = 0.8, strata = h1n1_vaccine)
 train_data_h1n1 <- training(data_split_h1n1)
 eval_data_h1n1  <- testing(data_split_h1n1)
+
 
 data_split_seas <- initial_split(train_df, prop = 0.8, strata = seasonal_vaccine)
 train_data_seas <- training(data_split_seas)

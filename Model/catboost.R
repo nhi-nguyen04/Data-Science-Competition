@@ -5,20 +5,23 @@
 # -----------------------------------------------
 # 1. SET UP ENVIRONMENT
 # -----------------------------------------------
-install.packages('remotes')
-#remotes::install_url('https://github.com/catboost/catboost/releases/download/v1.2.8/catboost-R-darwin-universal2-1.2.8.tgz', INSTALL_opts = c("--no-multiarch", "--no-test-load"))
-install.packages(
-  "/Users/vaniltonpaulo/Desktop/catboost-R-darwin-universal2-1.2.8.tgz",
-  repos = NULL,
-  type  = "binary"
-)
+# Step 1: Install 'remotes' with an explicit CRAN mirror
+install.packages("remotes", repos = "http://cran.us.r-project.org")
 
+# Step 2: Use remotes to install CatBoost from GitHub
+remotes::install_github("catboost/catboost", subdir = "catboost/R-package")
 install.packages(
   local_file,
   repos = NULL,
   type  = "source",
   INSTALL_opts = c("--no-multiarch", "--no-test-load")
 )
+
+
+
+remotes::install_github('catboost/catboost', subdir = 'catboost/R-package')
+
+
 
 library(tidyverse)
 library(tidymodels)

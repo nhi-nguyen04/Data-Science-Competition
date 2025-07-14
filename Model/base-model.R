@@ -22,12 +22,12 @@ train_features <- read_csv("Data/training_set_features.csv")
 train_labels   <- read_csv("Data/training_set_labels.csv")
 train_df       <- left_join(train_features, train_labels, by = "respondent_id")
 test_df        <- read_csv("Data/test_set_features.csv")
-
+glimpse(train_df)
+glimpse(test_df)
 #glimpse(train_df)
 #skim(train_df)
 #View(train_df)
-class(train_df)
-write.csv(train_df, "output.csv", row.names = FALSE)
+lapply(train_df, unique)
 # -----------------------------------------------
 # 3. DATA PREPARATION 
 # -----------------------------------------------
@@ -56,10 +56,12 @@ glimpse(train_df)
 # -----------------------------------------------
 #Ensures random split with similar distribution of the outcome variable 
 data_split_h1n1 <- initial_split(train_df, prop = 0.8, strata = h1n1_vaccine)
+data_split_h1n1
 train_data_h1n1 <- training(data_split_h1n1)
 eval_data_h1n1  <- testing(data_split_h1n1)
 
 data_split_seas <- initial_split(train_df, prop = 0.8, strata = seasonal_vaccine)
+data_split_seas
 train_data_seas <- training(data_split_seas)
 eval_data_seas  <- testing(data_split_seas)
 # -----------------------------------------------
@@ -109,6 +111,8 @@ lr_wf_h1n1 <- workflow() %>%
   add_recipe(h1n1_recipe) %>%
   add_model(log_spec)
 
+lr_wf_h1n1
+
 lr_wf_seas <- workflow() %>%
   add_recipe(seas_recipe) %>%
   add_model(log_spec)
@@ -130,15 +134,18 @@ lr_seas_dt_wkfl_fit <- lr_wf_seas %>%
 lr_metrics_h1n1 <- lr_h1n1_dt_wkfl_fit %>% 
   collect_metrics()
 
+
 lr_metrics_seas <- lr_seas_dt_wkfl_fit %>% 
   collect_metrics()
 
 # 1. Pull out predictions (with class‐probabilities)
 lr_h1n1_preds <- collect_predictions(lr_h1n1_dt_wkfl_fit)
+lr_h1n1_preds
 lr_seas_preds <- collect_predictions(lr_seas_dt_wkfl_fit)
 
 # 2. Compute ROC curve data
 lr_roc_h1n1 <- roc_curve(lr_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+lr_roc_h1n1
 lr_roc_seas <- roc_curve(lr_seas_preds, truth = seasonal_vaccine, .pred_1)
 
 # 2a. Plot separately  ROC curves

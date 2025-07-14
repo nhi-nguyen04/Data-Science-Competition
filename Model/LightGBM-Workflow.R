@@ -120,167 +120,360 @@ lgbm_wf_seas <- workflow() %>%
 # -----------------------------------------------
 # 8. BASELINE TRAIN (last_fit)
 # -----------------------------------------------
-lgbm_h1n1_base <- lgbm_wf_h1n1 %>% last_fit(split = data_split_h1n1)
-lgbm_seas_base <- lgbm_wf_seas %>% last_fit(split = data_split_seas)
+lgbm_h1n1_dt_wkfl_fit <- lgbm_wf_h1n1 %>% last_fit(split = data_split_h1n1)
+lgbm_seas_dt_wkfl_fit <- lgbm_wf_seas %>% last_fit(split = data_split_seas)
 
-saveRDS(lgbm_h1n1_base, "results/section8_lgbm_h1n1_dt_wkfl_fit.rds")
-saveRDS(lgbm_seas_base, "results/section8_lgbm_seas_dt_wkfl_fit.rds")
+saveRDS(lgbm_h1n1_dt_wkfl_fit, "results/section8_lgbm_h1n1_dt_wkfl_fit.rds")
+saveRDS(lgbm_seas_dt_wkfl_fit, "results/section8_lgbm_seas_dt_wkfl_fit.rds")
 # -----------------------------------------------
 # 9. BASELINE METRICS & ROC
 # -----------------------------------------------
-lgbm_h1n1_base %>% collect_metrics()
-lgbm_seas_base %>% collect_metrics()
+lgbm_metrics_h1n1 <- lgbm_h1n1_dt_wkfl_fit %>% collect_metrics()
 
-h1n1_base_preds <- collect_predictions(lgbm_h1n1_base)
-seas_base_preds <- collect_predictions(lgbm_seas_base)
+lgbm_metrics_seas <- lgbm_seas_dt_wkfl_fit %>% collect_metrics()
 
-roc_curve(h1n1_base_preds, truth = h1n1_vaccine, .pred_1) %>% autoplot() + ggtitle("H1N1 ROC (LightGBM)")
-roc_curve(seas_base_preds, truth = seasonal_vaccine, .pred_1) %>% autoplot() + ggtitle("Seasonal ROC (LightGBM)")
+lgbm_h1n1_preds <- collect_predictions(lgbm_h1n1_dt_wkfl_fit)
 
-custom_metrics <- metric_set(accuracy, sens, spec, roc_auc)
-custom_metrics(h1n1_base_preds, truth = h1n1_vaccine, estimate = .pred_class, .pred_1)
-custom_metrics(seas_base_preds, truth = seasonal_vaccine, estimate = .pred_class, .pred_1)
+lgbm_seas_preds <- collect_predictions(lgbm_seas_dt_wkfl_fit)
+
+
+
+
+# 2. Compute ROC curve data
+lgbm_roc_h1n1 <- roc_curve(lgbm_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+lgbm_roc_seas <- roc_curve(lgbm_seas_preds, truth = seasonal_vaccine, .pred_1)
+
+# 2a. Plot separately  ROC curves
+autoplot(lgbm_roc_h1n1) + 
+  ggtitle("H1N1 Vaccine ROC Curve")
+
+autoplot(lgbm_roc_seas) + 
+  ggtitle("Seasonal Vaccine ROC Curve")
+
+#2b.Calcualte the ROC AUC VALUES
+roc_auc(lgbm_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+
+roc_auc(lgbm_seas_preds, truth = seasonal_vaccine, .pred_1)
+
+
+#confusion matrix
+
+# Compute confusion matrix with Heatmap for counts
+lgbm_h1n1_preds %>%
+  conf_mat(truth = h1n1_vaccine, estimate = .pred_class) %>%
+  autoplot(type = "heatmap")
+
+lgbm_seas_preds %>%
+  conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
+  autoplot(type = "heatmap")
+
+# Compute confusion matrix with mosaic plots for visualization of sensitivity and specitivity
+lgbm_h1n1_preds %>%
+  conf_mat(truth = h1n1_vaccine, estimate = .pred_class) %>%
+  autoplot(type = "mosaic")
+
+lgbm_seas_preds %>%
+  conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
+  autoplot(type = "mosaic")
+
+#custom metric predictions --> we added f1 score
+custom_metrics <- metric_set(accuracy,sens,spec,roc_auc,f_meas)
+
+
+custom_metrics(lgbm_h1n1_preds,truth = h1n1_vaccine, estimate = .pred_class,.pred_1)
+custom_metrics(lgbm_seas_preds,truth = seasonal_vaccine, estimate = .pred_class,.pred_1)
 
 # -----------------------------------------------
 # 10. CROSS-VALIDATION
 # -----------------------------------------------
-plan(multisession, workers = 4)
-h1n1_folds <- vfold_cv(train_data_h1n1, v = 10, strata = h1n1_vaccine)
-seasonal_folds <- vfold_cv(train_data_seas, v = 10, strata = seasonal_vaccine)
+plan(multisession, workers = 4) 
 
-cv_metrics <- metric_set(accuracy, roc_auc, sens, spec)
+set.seed(290)
+h1n1_folds <- vfold_cv(train_data_h1n1, 
+                       v = 10,
+                       strata = h1n1_vaccine)
 
-lgbm_h1n1_rs <- fit_resamples(
-  lgbm_wf_h1n1,
-  resamples = h1n1_folds,
-  metrics = cv_metrics
-)
-lgbm_seas_rs <- fit_resamples(
-  lgbm_wf_seas,
-  resamples = seasonal_folds,
-  metrics = cv_metrics
-)
+h1n1_folds
 
 
-saveRDS(lgbm_h1n1_rs, "results/section10_lgbm_h1n1_dt_rs.rds")
-saveRDS(lgbm_seas_rs, "results/section10_lgbm_seasonal_dt_rs.rds")
+seasonal_folds <- vfold_cv(train_data_seas, 
+                           v = 10,
+                           strata = seasonal_vaccine)
+
+seasonal_folds
+
+# Create custom metrics function
+data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 
-lgbm_h1n1_rs %>% collect_metrics()
-lgbm_seas_rs %>% collect_metrics()
+
+lgbm_h1n1_dt_rs <- lgbm_wf_h1n1 %>%
+     fit_resamples(resamples = h1n1_folds,
+                   metrics = data_metrics)
+  
+  
+  
+lgbm_seasonal_dt_rs <- lgbm_wf_seas %>%
+     fit_resamples(resamples = seasonal_folds,
+                   metrics = data_metrics)
+
+
+saveRDS(lgbm_h1n1_dt_rs, "results/section10_lgbm_h1n1_dt_rs.rds")
+saveRDS(lgbm_seasonal_dt_rs, "results/section10_lgbm_seasonal_dt_rs.rds")
+
+
+
+
+
+
+lgbm_rs_metrics_h1n1 <- lgbm_h1n1_dt_rs %>% 
+  collect_metrics()
+
+lgbm_rs_metrics_seas <- lgbm_seasonal_dt_rs %>% 
+  collect_metrics()
+
+
+# Detailed cross validation results
+lgbm_h1n1_dt_rs_results <- lgbm_h1n1_dt_rs %>% 
+  collect_metrics(summarize = FALSE)
+
+# Explore model performance for decision tree
+lgbm_h1n1_dt_rs_results %>% 
+  group_by(.metric) %>% 
+  summarize(min = min(.estimate),
+            median = median(.estimate),
+            max = max(.estimate),
+            sd = sd(.estimate))
+
+
+lgbm_seasonal_dt_rs_results <- lgbm_seasonal_dt_rs %>% 
+  collect_metrics(summarize = FALSE)
+
+# Explore model performance for decision tree
+lgbm_seasonal_dt_rs_results %>% 
+  group_by(.metric) %>% 
+  summarize(min = min(.estimate),
+            median = median(.estimate),
+            max = max(.estimate),
+            sd = sd(.estimate))
 
 # -----------------------------------------------
 # 11. HYPERPARAMETER TUNING
 # -----------------------------------------------
-tune_model <- boost_tree(
+lgbm_dt_tune_model <- boost_tree(
   trees       = tune(),
   tree_depth  = tune(),
   learn_rate  = tune(),
   sample_size = tune()
 ) %>% set_mode("classification") %>% set_engine("lightgbm", verbose = -1)
 
-lgbm_h1n1_tune_wf <- lgbm_wf_h1n1 %>% update_model(tune_model)
-lgbm_seas_tune_wf <- lgbm_wf_seas %>% update_model(tune_model)
 
-params <- parameters(
-  trees(range = c(1L,5000L)),
-  tree_depth(range = c(1L,20L)),
-  learn_rate(range = c(1e-4,1), trans = scales::log10_trans()),
-  sample_prop(range = c(0.1,1))
-)
-params_h1n1 <- finalize(params, train_data_h1n1)
-params_seas <- finalize(params, train_data_seas)
+lgbm_dt_tune_model
+
+lgbm_h1n1_tune_wkfl <- lgbm_wf_h1n1 %>% update_model(lgbm_dt_tune_model)
+lgbm_h1n1_tune_wkfl
+
+
+lgbm_seas_tune_wkfl <- lgbm_wf_seas %>% update_model(lgbm_dt_tune_model)
+
+lgbm_seas_tune_wkfl
+
+lgbm_default_params <- parameters(lgbm_dt_tune_model)
+
+# 4) Finalize any data-dependent params (like mtry for RF; not strictly needed here,
+#    but good practice if you ever tune something that depends on # predictors)
+lgbm_h1n1_params <- finalize(lgbm_default_params, train_data_h1n1)
+lgbm_seas_params <- finalize(lgbm_default_params, train_data_seas)
+
+
+# For speed
+plan(multisession, workers = 4) 
+
 
 set.seed(214)
-grid_h1n1 <- grid_random(params_h1n1, size=100)
+#Increased grid random from 50 to 60 and about to test to server
+lgbm_h1n1_grid <- grid_random(lgbm_h1n1_params, size = 50)
+
 set.seed(215)
-grid_seas <- grid_random(params_seas, size=100)
-
-lgbm_h1n1_tuning <- tune_grid(
-  lgbm_h1n1_tune_wf,
-  resamples = h1n1_folds,
-  grid      = grid_h1n1,
-  metrics   = cv_metrics,
-  control = control_stack_grid()
-)
-lgbm_seas_tuning <- tune_grid(
-  lgbm_seas_tune_wf,
-  resamples = seasonal_folds,
-  grid      = grid_seas,
-  metrics   = cv_metrics,
- control = control_stack_grid()
-)
+lgbm_seas_grid <- grid_random(lgbm_seas_params, size = 50)
 
 
-saveRDS(lgbm_h1n1_tuning, "results/section11_lgbm_h1n1_dt_tuning.rds")
-saveRDS(lgbm_seas_tuning, "results/section11_lgbm_seas_dt_tuning.rds")
+ctrl_grid <- control_stack_grid()      # for tune_grid()
+ctrl_res <- control_stack_resamples()  # for fit_resamples()
+
+
+
+
+
+
+
+lgbm_h1n1_dt_tuning <- lgbm_h1n1_tune_wkfl %>%
+  tune_grid(resamples = h1n1_folds,
+            grid = lgbm_h1n1_grid,
+            metrics = data_metrics,
+            control = control_stack_grid())
+
+
+lgbm_seas_dt_tuning <- lgbm_seas_tune_wkfl %>%
+  tune_grid(resamples = seasonal_folds,
+            grid = lgbm_seas_grid,
+            metrics = data_metrics,
+            control = control_stack_grid())
+
+
+saveRDS(lgbm_h1n1_dt_tuning, "results/section11_lgbm_h1n1_dt_tuning.rds")
+saveRDS(lgbm_seas_dt_tuning, "results/section11_lgbm_seas_dt_tuning.rds")
+
+
+
+
+
+# View results
+lgbm_h1n1_dt_tuning %>% 
+  collect_metrics()
+
+
+# View results
+lgbm_seas_dt_tuning %>% 
+  collect_metrics()
+
+
+# Collect detailed tuning results
+lgbm_h1n1_dt_tuning_results <- lgbm_h1n1_dt_tuning %>% 
+  collect_metrics(summarize = FALSE)
+
+# Explore detailed ROC AUC results for each fold
+lgbm_h1n1_dt_tuning_results %>% 
+  filter(.metric == 'roc_auc') %>% 
+  group_by(id) %>% 
+  summarize(min_roc_auc = min(.estimate),
+            median_roc_auc = median(.estimate),
+            max_roc_auc = max(.estimate))
+
+
+# Collect detailed tuning results
+lgbm_seas_dt_tuning_results <- lgbm_seas_dt_tuning %>% 
+  collect_metrics(summarize = FALSE)
+
+# Explore detailed ROC AUC results for each fold
+lgbm_seas_dt_tuning_results %>% 
+  filter(.metric == 'roc_auc') %>% 
+  group_by(id) %>% 
+  summarize(min_roc_auc = min(.estimate),
+            median_roc_auc = median(.estimate),
+            max_roc_auc = max(.estimate))
+
 
 
 # -----------------------------------------------
-# 12. SELECT BEST
+# 12.Selecting the best model
 # -----------------------------------------------
-best_h1n1 <- select_best(lgbm_h1n1_tuning, "roc_auc")
-best_seas <- select_best(lgbm_seas_tuning, "roc_auc")
+
+# Display 5 best performing models
+lgbm_h1n1_dt_tuning %>% 
+  show_best(metric = 'roc_auc', n = 5)
+
+lgbm_seas_dt_tuning %>% 
+  show_best(metric = 'roc_auc', n = 5)
+
+
+
+# Select based on best performance
+lgbm_best_h1n1_dt_model <- lgbm_h1n1_dt_tuning %>% 
+  # Choose the best model based on roc_auc
+  select_best(metric = 'roc_auc')
+
+lgbm_best_h1n1_dt_model
+
+
+lgbm_best_seas_dt_model <- lgbm_seas_dt_tuning %>% 
+  # Choose the best model based on roc_auc
+  select_best(metric = 'roc_auc')
+
+lgbm_best_seas_dt_model
+
 
 # -----------------------------------------------
-# 13. FINALIZE WORKFLOWS
+# 13.Finalize your workflow
 # -----------------------------------------------
-lgbm_h1n1_final_wf <- lgbm_h1n1_tune_wf %>% finalize_workflow(best_h1n1)
-lgbm_seas_final_wf <- lgbm_seas_tune_wf %>% finalize_workflow(best_seas)
+lgbm_final_h1n1_tune_wkfl <- lgbm_h1n1_tune_wkfl %>% 
+  finalize_workflow(lgbm_best_h1n1_dt_model)
+
+lgbm_final_h1n1_tune_wkfl
+
+
+lgbm_final_seas_tune_wkfl <- lgbm_seas_tune_wkfl %>% 
+  finalize_workflow(lgbm_best_seas_dt_model)
+
+lgbm_final_seas_tune_wkfl
+
 
 # -----------------------------------------------
-# 14. LAST_FIT FINAL
+# 14. LAST_FIT ON THE HELD-OUT SPLITS
 # -----------------------------------------------
-lgbm_h1n1_final_fit <- lgbm_h1n1_final_wf %>% last_fit(split = data_split_h1n1)
-lgbm_seas_final_fit <- lgbm_seas_final_wf %>% last_fit(split = data_split_seas)
+lgbm_h1n1_final_fit <- lgbm_final_h1n1_tune_wkfl %>% 
+  last_fit(split = data_split_h1n1)
 
-# -----------------------------------------------
-# 15. FINAL METRICS
+lgbm_seas_final_fit <- lgbm_final_seas_tune_wkfl %>% 
+  last_fit(split = data_split_seas)
+
+
+#-----------------------------------------------
+# 15. COLLECT METRICS
 # -----------------------------------------------
 lgbm_h1n1_final_fit %>% collect_metrics()
-lgbm_seas_final_fit %>% collect_metrics()
+lgbm_seas_final_fit  %>% collect_metrics()
+
 
 # -----------------------------------------------
-# 16. ROC FINAL PLOTS
+# 16. ROC CURVE VISUALIZATION (via last_fit results)
 # -----------------------------------------------
-lgbm_aftr_tunning_h1n1_preds <- collect_predictions(lgbm_h1n1_final_fit)
-lgbm_aftr_tunning_seas_preds <- collect_predictions(lgbm_seas_final_fit)
+#library(yardstick)
+#library(ggplot2)
 
-roc_curve(lgbm_aftr_tunning_h1n1_preds, truth=h1n1_vaccine,.pred_1) %>% autoplot() + ggtitle("Final H1N1 ROC")
-roc_curve(lgbm_aftr_tunning_seas_preds, truth=seasonal_vaccine,.pred_1) %>% autoplot() + ggtitle("Final Seasonal ROC")
+# 1) Pull out predictions (with probabilities)
+lgbm_aftr_tunning_h1n1_preds <- lgbm_h1n1_final_fit %>% 
+  collect_predictions()
+lgbm_aftr_tunning_seas_preds <- lgbm_seas_final_fit  %>% 
+  collect_predictions()
+
+# 2) Compute ROC curve data
+lgbm_aftr_tunning_roc_h1n1 <- roc_curve(lgbm_aftr_tunning_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+lgbm_aftr_tunning_roc_seas <- roc_curve(lgbm_aftr_tunning_seas_preds, truth = seasonal_vaccine, .pred_1)
+
+# 3a) Plot separately
+autoplot(lgbm_aftr_tunning_roc_h1n1) +
+  ggtitle("Final H1N1 Vaccine ROC Curve (XGBoost)")
+autoplot(lgbm_aftr_tunning_roc_seas) + 
+  ggtitle("Final Seasonal Vaccine ROC Curve(XGBoost)")
+
 
 # -----------------------------------------------
-# 17. TRAIN ON FULL DATA
+# 17. TRAIN FINAL MODELS ON FULL TRAINING DATA
 # -----------------------------------------------
-lgbm_full_h1n1 <- fit(lgbm_h1n1_final_wf, train_df)
-lgbm_full_seas <- fit(lgbm_seas_final_wf, train_df)
+lgbm_final_h1n1 <- fit(lgbm_final_h1n1_tune_wkfl, train_df)
+lgbm_final_seas <- fit(lgbm_final_seas_tune_wkfl, train_df)
 
-vip(lgbm_full_h1n1, num_features=15)
-vip(lgbm_full_seas, num_features=15)
+
+# Here I am checking for variable importance
+vip::vip(lgbm_final_h1n1, num_features= 15)
+vip::vip(lgbm_final_seas,  num_features= 15)
+
 
 # -----------------------------------------------
-# 18. PREDICT ON TEST
+# 18. MAKE PREDICTIONS ON TEST DATA
 # -----------------------------------------------
-test_prep <- test_df %>%
+# Add missing columns to test data to match training structure
+test_df_prepared <- test_df %>%
   mutate(
-    h1n1_vaccine=factor(NA,levels=c(1,0)),
-    seasonal_vaccine=factor(NA,levels=c(1,0)),
-    strata=NA_character_
-  )
+    h1n1_vaccine = factor(NA, levels = c(1, 0)),
+    seasonal_vaccine = factor(NA, levels = c(1, 0)),
+    strata = NA_character_)
 
-pred_h1n1 <- predict(lgbm_full_h1n1,test_prep,type="prob") %>% pull(.pred_1)
-pred_seas <- predict(lgbm_full_seas,test_prep,type="prob") %>% pull(.pred_1)
+test_pred_h1n1_lgbm <- predict(lgbm_final_h1n1, test_df_prepared, type = "prob") %>%
+  pull(.pred_1)
+test_pred_seas_lgbm <- predict(lgbm_final_seas, test_df_prepared, type = "prob") %>% 
+  pull(.pred_1)
 
-# -----------------------------------------------
-# 19. CREATE SUBMISSION
-# -----------------------------------------------
-submission <- tibble(
-  respondent_id=train_df$respondent_id,
-  h1n1_vaccine=pred_h1n1,
-  seasonal_vaccine=pred_seas
-)
-
-# -----------------------------------------------
-# 20. SAVE SUBMISSION
-# -----------------------------------------------
-write_csv(submission,"lightgbm-workflow.csv")
+head(test_pred_h1n1_lgbm)
+head(test_pred_seas_lgbm)
