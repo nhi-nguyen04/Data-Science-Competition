@@ -640,8 +640,8 @@ missing_summary %>% filter(missing > 0)
 missing_plot <- ggplot(missing_summary %>% filter(missing > 0), 
                        aes(x = reorder(feature, missing), y = percent, fill = feature_type)) +
   geom_bar(stat = "identity") +
-  geom_text(aes(label = sprintf("%.1f%%", percent)), hjust = -0.1, size = 3) +
-  scale_fill_manual(values = cb_palette[c(1, 3, 5, 7)]) +
+#  geom_text(aes(label = sprintf("%.1f%%", percent)), hjust = -0.1, size = 3) +
+  scale_fill_manual(values = cb_palette[c(1, 3, 7)]) +
   coord_flip() +
   labs(
     title = "Missing Values by Feature",
