@@ -7,11 +7,11 @@ multi_metrics <- metric_set(roc_auc, accuracy, sens, spec)
 #For H1N1  Flu Vaccine#
 #######################
 preds_stacked_pre_tune_h1n1 <- bind_rows(
-  lr_h1n1_preds %>% mutate(model = "logistic_regression"),
-  dt_h1n1_preds %>% mutate(model = "decision_trees"),
-  bt_h1n1_preds %>% mutate(model = "bagged_trees"),
-  rf_h1n1_preds %>% mutate(model = "random_forest"),
-  xgb_h1n1_preds %>% mutate(model = "xgboost")
+  lr_h1n1_preds %>% mutate(model = "Logistic Regression"),
+  dt_h1n1_preds %>% mutate(model = "Decision Trees"),
+  bt_h1n1_preds %>% mutate(model = "Bagged Trees"),
+  rf_h1n1_preds %>% mutate(model = "Random Forest"),
+  xgb_h1n1_preds %>% mutate(model = "XGBoost")
 )
 
 # Calculate comprehensive performance metrics
@@ -30,18 +30,22 @@ roc_data_h1n1 <- preds_stacked_pre_tune_h1n1 %>%
   roc_curve(truth = h1n1_vaccine, .pred_1)
 
 roc_data_h1n1 %>%
-  autoplot() + 
-  ggtitle("H1N1 Vaccine: ROC Curves (Pre-Tuning)")
+  autoplot(size = 1.2) + 
+  labs(title = "H1N1 Vaccine: ROC Curves (Pre-Tuning)",
+  x = "1 - Specificity", 
+  y = "Sensitivity",
+  color = "Model") +
+  scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9", "#009E73", "#CC79A7"))
 
 ##########################
 #For Seasonal Flu Vaccine#
 ##########################
 preds_stacked_pre_tune_seas <- bind_rows(
-  lr_seas_preds %>% mutate(model = "logistic_regression"),
-  dt_seas_preds %>% mutate(model = "decision_trees"),
-  bt_seas_preds %>% mutate(model = "bagged_trees"),
-  rf_seas_preds %>% mutate(model = "random_forest"),
-  xgb_seas_preds %>% mutate(model = "xgboost")
+  lr_seas_preds %>% mutate(model = "Logistic Regression"),
+  dt_seas_preds %>% mutate(model = "Decision Trees"),
+  bt_seas_preds %>% mutate(model = "Bagged Trees"),
+  rf_seas_preds %>% mutate(model = "Random Forest"),
+  xgb_seas_preds %>% mutate(model = "XGBoost")
 )
 
 # Calculate comprehensive performance metrics
@@ -60,8 +64,13 @@ roc_data_seas <- preds_stacked_pre_tune_seas %>%
   roc_curve(truth = seasonal_vaccine, .pred_1)
 
 roc_data_seas %>%
-  autoplot() + 
-  ggtitle("Seasonal Vaccine: ROC Curves (Pre-Tuning)")
+  autoplot(size = 1.2) + 
+  labs(title = "Seasonal Vaccine: ROC Curves (Pre-Tuning)",
+       x = "1 - Specificity", 
+       y = "Sensitivity",
+       color = "Model") +
+  scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9", "#009E73", "#CC79A7"))
+
 
 # ────────────────────────────────1.Post Hypertuning ────────────────────────────────
 
@@ -69,11 +78,11 @@ roc_data_seas %>%
 #For H1N1  Flu Vaccine#
 #######################
 preds_stacked_post_tune_h1n1 <- bind_rows(
-  lr_aftr_tunning_h1n1_preds %>% mutate(model = "logistic_regression"),
-  dt_aftr_tunning_h1n1_preds %>% mutate(model = "decision_trees"),
-  bt_aftr_tunning_h1n1_preds %>% mutate(model = "bagged_trees"),
-  rf_aftr_tunning_h1n1_preds %>% mutate(model = "random_forest"),
-  xgb_aftr_tunning_h1n1_preds %>% mutate(model = "xgboost")
+  lr_aftr_tunning_h1n1_preds %>% mutate(model = "Logistic Regression"),
+  dt_aftr_tunning_h1n1_preds %>% mutate(model = "Decision Trees"),
+  bt_aftr_tunning_h1n1_preds %>% mutate(model = "Bagged Trees"),
+  rf_aftr_tunning_h1n1_preds %>% mutate(model = "Random Forest"),
+  xgb_aftr_tunning_h1n1_preds %>% mutate(model = "XGBoost")
 )
 
 # Calculate comprehensive performance metrics
@@ -93,17 +102,21 @@ roc_data_post_h1n1 <- preds_stacked_post_tune_h1n1 %>%
 
 roc_data_post_h1n1 %>%
   autoplot() + 
-  ggtitle("H1N1 Vaccine: ROC Curves (Post-Tuning)")
+  labs(title = "H1N1 Vaccine: ROC Curves (Post-Tuning)",
+       x = "1 - Specificity", 
+       y = "Sensitivity",
+       color = "Model") +
+  scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9", "#009E73", "#CC79A7"))
 
 ##########################
 #For Seasonal Flu Vaccine#
 ##########################
 preds_stacked_post_tune_seas <- bind_rows(
-  lr_aftr_tunning_seas_preds %>% mutate(model = "logistic_regression"),
-  dt_aftr_tunning_seas_preds %>% mutate(model = "decision_trees"),
-  bt_aftr_tunning_seas_preds %>% mutate(model = "bagged_trees"),
-  rf_aftr_tunning_seas_preds %>% mutate(model = "random_forest"),
-  xgb_aftr_tunning_seas_preds %>% mutate(model = "xgboost")
+  lr_aftr_tunning_seas_preds %>% mutate(model = "Logistic Regression"),
+  dt_aftr_tunning_seas_preds %>% mutate(model = "Decision Trees"),
+  bt_aftr_tunning_seas_preds %>% mutate(model = "Bagged Trees"),
+  rf_aftr_tunning_seas_preds %>% mutate(model = "Random Forest"),
+  xgb_aftr_tunning_seas_preds %>% mutate(model = "XGBoost")
 )
 
 # Calculate comprehensive performance metrics
@@ -123,7 +136,11 @@ roc_data_post_seas <- preds_stacked_post_tune_seas %>%
 
 roc_data_post_seas %>%
   autoplot() + 
-  ggtitle("Seasonal Vaccine: ROC Curves (Post-Tuning)")
+  labs(title = "Seasonal Vaccine: ROC Curves (Post-Tuning)",
+       x = "1 - Specificity", 
+       y = "Sensitivity",
+       color = "Model") +
+  scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9", "#009E73", "#CC79A7"))
 
 # ─────────────────────────────── COMPARISON SUMMARY ────────────────────────────────
 
