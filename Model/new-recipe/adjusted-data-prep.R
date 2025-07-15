@@ -1,3 +1,40 @@
+
+# -----------------------------------------------
+# 1. SET UP ENVIRONMENT
+# -----------------------------------------------
+library(tidyverse)
+library(tidymodels)
+library(baguette)
+library(tune)
+library(future)
+library(vip) # for variable importance
+library(skimr)
+set.seed(6)
+
+
+# -----------------------------------------------
+# 2. LOAD DATA
+# -----------------------------------------------
+train_features <- read_csv("Data/training_set_features.csv")
+train_labels   <- read_csv("Data/training_set_labels.csv")
+train_df       <- left_join(train_features, train_labels, by = "respondent_id")
+test_df        <- read_csv("Data/test_set_features.csv")
+glimpse(train_df)
+glimpse(test_df)
+#glimpse(train_df)
+#skim(train_df)
+#View(train_df)
+lapply(train_df, unique)
+# -----------------------------------------------
+# 3. DATA PREPARATION 
+# -----------------------------------------------
+train_df <- train_df %>%
+  mutate(
+    h1n1_vaccine     = factor(h1n1_vaccine, levels = c(1, 0)),
+    seasonal_vaccine = factor(seasonal_vaccine, levels = c(1, 0))
+  )
+
+
 ordinal_vars <- c(
   "h1n1_concern",                    # 0-3 scale
   "h1n1_knowledge",                  # 0-2 scale  
@@ -124,6 +161,7 @@ lr_wf_seas <- workflow() %>%
 # -----------------------------------------------
 # 8. TRAIN & EVALUATE ON SPLIT
 # -----------------------------------------------
+set.seed(89)
 lr_h1n1_dt_wkfl_fit <- lr_wf_h1n1 %>% 
   last_fit(split = data_split_h1n1)
 
