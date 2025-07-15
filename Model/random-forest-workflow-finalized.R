@@ -190,9 +190,10 @@ rf_wf_seas <- workflow() %>%
 # 
 # rf_seas_dt_wkfl_fit <- rf_wf_seas %>%
 #   last_fit(split = data_split_seas)
+# 
+# saveRDS(rf_h1n1_dt_wkfl_fit, "Model/results/section8_rf_h1n1_dt_wkfl_fit.rds")
+# saveRDS(rf_seas_dt_wkfl_fit, "Model/results/section8_rf_seas_dt_wkfl_fit.rds")
 
-# saveRDS(rf_h1n1_dt_wkfl_fit, "results/section8_rf_h1n1_dt_wkfl_fit.rds")
-# saveRDS(rf_seas_dt_wkfl_fit, "results/section8_rf_seas_dt_wkfl_fit.rds")
 rf_h1n1_dt_wkfl_fit     <- readRDS("Model/results/section8_rf_h1n1_dt_wkfl_fit.rds")
 rf_seas_dt_wkfl_fit     <- readRDS("Model/results/section8_rf_seas_dt_wkfl_fit.rds")
 
@@ -284,16 +285,16 @@ data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 
 # Fit resamples
-# rf_h1n1_dt_rs <- rf_wf_h1n1 %>%
-#   fit_resamples(resamples = h1n1_folds,
-#                 metrics = data_metrics)
-# 
-# rf_seasonal_dt_rs <- rf_wf_seas %>%
-#   fit_resamples(resamples = seasonal_folds,
-#                 metrics = data_metrics)
+rf_h1n1_dt_rs <- rf_wf_h1n1 %>%
+  fit_resamples(resamples = h1n1_folds,
+                metrics = data_metrics)
 
-# saveRDS(rf_h1n1_dt_rs, "results/section10_rf_h1n1_dt_rs.rds")
-# saveRDS(rf_seasonal_dt_rs, "results/section10_rf_seasonal_dt_rs.rds")
+rf_seasonal_dt_rs <- rf_wf_seas %>%
+  fit_resamples(resamples = seasonal_folds,
+                metrics = data_metrics)
+
+saveRDS(rf_h1n1_dt_rs, "Model/results/section10_rf_h1n1_dt_rs.rds")
+saveRDS(rf_seasonal_dt_rs, "Model/results/section10_rf_seasonal_dt_rs.rds")
 
 rf_h1n1_dt_rs           <- readRDS("Model/results/section10_rf_h1n1_dt_rs.rds")
 rf_seasonal_dt_rs       <- readRDS("Model/results/section10_rf_seasonal_dt_rs.rds")
