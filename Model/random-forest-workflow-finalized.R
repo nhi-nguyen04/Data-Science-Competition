@@ -152,8 +152,8 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   # Step 1: Impute + encode
   step_impute_mode(all_nominal_predictors()) %>%
   step_impute_median(all_numeric_predictors()) %>%
-  step_unknown(all_nominal_predictors()) %>%
-  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+  #step_unknown(all_nominal_predictors()) %>%
+  #step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
   
   # Step 2: Interactions (after dummy encoding, using dummy names)
   step_interact(terms = ~ starts_with("opinion_seas_vacc_effective_"):starts_with("opinion_seas_risk_")) %>%

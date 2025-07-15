@@ -120,7 +120,7 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   # Step 1: Impute + encode
   step_impute_mode(all_nominal_predictors()) %>%
   step_impute_median(all_numeric_predictors()) %>%
-  step_unknown(all_nominal_predictors()) %>%
+  #step_unknown(all_nominal_predictors()) %>%
   #step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
   
   # Step 2: Interactions (after dummy encoding)
@@ -146,7 +146,7 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   # Step 1: Impute + encode
   step_impute_mode(all_nominal_predictors()) %>%
   step_impute_median(all_numeric_predictors()) %>%
-  step_unknown(all_nominal_predictors()) %>%
+  #step_unknown(all_nominal_predictors()) %>%
   #step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
   
   # Step 2: Interactions (after dummy encoding, using dummy names)
