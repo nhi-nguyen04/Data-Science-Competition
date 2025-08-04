@@ -101,6 +101,14 @@ After finishing all tasks, we will look at the models again.
 In the next meeting with the professor, we will share our results and ask for feedback.
 
 
+
+27/06/2025
+
+We held a discord meeting at 11:00 AM. All members attended. We discussed our main issue regarding model formula and how to deal with interactions.
+Looking at the issues, we  booked a meeting with our supervisor for best ways to deal with this matter.
+In the next meeting with the professor, we will share our results and ask for feedback.
+
+
 ## 🏆 Scores:
 
 - Base Model: 0.8283
