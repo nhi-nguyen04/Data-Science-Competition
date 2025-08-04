@@ -46,11 +46,23 @@ The competition uses **Area Under the ROC Curve (AUC-ROC)** as the evaluation me
 │ └── explorative data analysis.R
 ├── Model/
 │ └── Model.Rmd
-│ └── bagged_trees_model.R
+│ └── ensemble-stack.R
+│ └── testing-Model-Comparison
+│ └── best-comparison.R
+│ └── LightGBM-Workflow.R
+│ └── catboost.R
+│ └── testing.R
+│ └── Comparison.R
 │ └── base-model.R
-│ └── random-forest-workflow-finalized.R
+│ └── bagged_trees_model.R
 │ └── refined-dt.R
 │ └── xgboost-model.R
+│ └── random-forest-workflow-finalized.R
+│ └── new-recipe/
+│ └── ── recipes.R
+│ └── ── bs-model.R
+│ └── results/
+│ └── ── xxx.rds
 ├── Submissions/
 │ └── bagged_tree_workflow.csv
 │ └── finalized_dt_workflow.csv
@@ -100,13 +112,9 @@ Looking at the issues, we assigned each member equal tasks to do and finish befo
 After finishing all tasks, we will look at the models again.
 In the next meeting with the professor, we will share our results and ask for feedback.
 
+04/07/2025
 
-
-27/06/2025
-
-We held a discord meeting at 11:00 AM. All members attended. We discussed our main issue regarding model formula and how to deal with interactions.
-Looking at the issues, we  booked a meeting with our supervisor for best ways to deal with this matter.
-In the next meeting with the professor, we will share our results and ask for feedback.
+Today we are going to optimize tunning spaces together.
 
 
 ## 🏆 Scores:

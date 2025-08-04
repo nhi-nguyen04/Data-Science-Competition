@@ -13,7 +13,7 @@ library(knitr)
 library(tidyverse) 
 library(naniar)
 library(skimr) #Better Overview of the variables
-#test 1
+
 # theme set up for now
 # probably going to change in the future
 custom_theme <- theme_minimal() +
@@ -34,8 +34,8 @@ theme_set(custom_theme)
 
 # correct color mapping
 vaccine_colors <- c(
-  "Not Vaccinated" = "#E15759",
-  "Vaccinated"     = "#4E79A7"
+  "Not Vaccinated" = "#F1C45F",
+  "Vaccinated"     = "#1B80BB"
 )
 
 # -----------------------------------------------
@@ -49,11 +49,98 @@ labels_df   <- read.csv("Data/training_set_labels.csv")
 # -----------------------------------------------
 lapply(features_df, unique)
 
-#the labels don't have to be processed
+# the labels don't have to be processed
 lapply(labels_df, unique)
 
-#missing 
-vis_miss(features_df,warn_large_data = FALSE)
+# Rename labels
+features_df <- features_df %>%
+  rename("Respondend ID" = respondent_id ,
+         "H1N1 Concern" = h1n1_concern,
+         "H1N1 Knowledge" = h1n1_knowledge,
+         "Antiviral Medication" = behavioral_antiviral_meds,
+         "Avoidance" = behavioral_avoidance,
+         "Face Mask" = behavioral_face_mask,
+         "Wash Hands" = behavioral_wash_hands,
+         "Large Gatherings" = behavioral_large_gatherings,
+         "Outside Home" = behavioral_outside_home,
+         "Touch Face" = behavioral_touch_face,
+         "Doctor Recommendation H1N1" = doctor_recc_h1n1,
+         "Doctor Recommendation Seasonal" = doctor_recc_seasonal,
+         "Chronical Medical Condition" = chronic_med_condition,
+         "Child under 6 Months" = child_under_6_months,
+         "Health Worker" = health_worker,
+         "Health Insurance" = health_insurance,
+         "Opinion H1N1 Effect" = opinion_h1n1_vacc_effective,
+         "Opinion H1N1 Risk" = opinion_h1n1_risk,
+         "Opinion H1N1 sick from Vaccine" = opinion_h1n1_sick_from_vacc,
+         "Opinion Seasonal Effect" = opinion_seas_vacc_effective,
+         "Opinion Seasonal Risk" = opinion_seas_risk,
+         "Opinion Seasonal sick from Vaccine" = opinion_seas_sick_from_vacc,
+         "Age Group" = age_group,
+         "Education Level" = education,
+         "Race" = race,
+         "Sex" = sex,
+         "Income Level" = income_poverty,
+         "Marital Status" = marital_status,
+         "Housing Situation" = rent_or_own,
+         "Employment Status" = employment_status,
+         "Geographical Region" = hhs_geo_region,
+         "Metropolitan Statistical Areas" = census_msa,
+         "Number of other Adults in Household" = household_adults,
+         "Number of Children in Household" = household_children,
+         "Working Industry" = employment_industry,
+         "Type of Occupation" = employment_occupation)
+
+# missing 
+vis_miss(features_df, warn_large_data = FALSE) +
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1),
+        axis.text.y = element_text(size = 8)) +
+  ggtitle("Missing Data by Variable") +
+  labs(x = "Variables")
+
+gg_miss_var(features_df) +
+  scale_x_discrete(labels = c(
+    "respondent_id" = "Respondend ID",
+    "h1n1_concern" = "H1N1 Concern",
+    "h1n1_knowledge" = "H1N1 Knowledge",
+    "behavioral_antiviral_meds" = "Antiviral Medication",
+    "behavioral_avoidance" = "Avoidance",
+    "behavioral_face_mask" = "Face Mask",
+    "behavioral_wash_hands" = "Wash Hands",
+    "behavioral_large_gatherings" = "Large Gatherings",
+    "behavioral_outside_home" = "Outside Home",
+    "behavioral_touch_face" = "Touch Face",
+    "doctor_recc_h1n1" = "Doctor Recommendation H1N1",
+    "doctor_recc_seasonal" = "Doctor Recommendation Seasonal",
+    "chronic_med_condition" = "Chronical Medical Condition",
+    "child_under_6_months" = "Child under 6 Months",
+    "health_worker" = "Health Worker",
+    "health_insurance" = "Health Insurance",
+    "opinion_h1n1_vacc_effective" = "Opinion H1N1 Effect",
+    "opinion_h1n1_risk" = "Opinion H1N1 Risk",
+    "opinion_h1n1_sick_from_vacc" = "Opinion H1N1 sick from Vaccine",
+    "opinion_seas_vacc_effective" = "Opinion Seasonal Effect",
+    "opinion_seas_risk" = "Opinion Seasonal Risk",
+    "opinion_seas_sick_from_vacc" = "Opinion Seasonal sick from Vaccine",
+    "age_group" = "Age Group",
+    "education" = "Education Level",
+    "race" = "Race",
+    "sex" = "Sex",
+    "income_poverty" = "Income Level",
+    "marital_status" = "Marital Status",
+    "rent_or_own" = "Housing Situation",
+    "employment_status" = "Employment Status",
+    "hhs_geo_region" = "Geographical Region",
+    "census_msa" = "Metropolitan Statistical Areas",
+    "household_adults" = "Number of other Adults in Household",
+    "household_children" = "Number of Children in Household",
+    "employment_industry" = "Working Industry",
+    "employment_occupation" = "Type of Occupation"
+  )) +
+  labs(x = "Variable", y = "Number of Missing") +
+  ggtitle("Missing Data by Variable") +
+  theme(axis.text.y = element_text(size = 7))
 
 #Only columns with missing
 features_df %>%
@@ -64,10 +151,10 @@ features_df %>%
 # 4. PLOTS DESIGN -> VACCINATION RATE
 # -----------------------------------------------
 
-#plot function
+# plot function
 create_vaccine_plot <- function(data, vaccine_type) {
   var_name <- paste0(vaccine_type, "_vaccine")
-  title    <- sprintf("%s Vaccination Status",
+  title    <- sprintf("%s Vaccination Rates",
                       tools::toTitleCase(vaccine_type))
   n_obs    <- nrow(data)
   
@@ -83,13 +170,9 @@ create_vaccine_plot <- function(data, vaccine_type) {
     ) %>%
     ggplot(aes(x = vaccine, y = proportion, fill = vaccine)) +
     geom_col(width = 0.6) +
-    geom_text(aes(label = paste0(round(proportion,1), "%")),
-              position = position_stack(vjust = 0.5),
-              color = "white", fontface = "bold") +
     scale_fill_manual(values = vaccine_colors) +
     labs(
-      title    = title,
-      subtitle = paste("Distribution of", title),
+#      title    = title,
       y        = "Percentage (%)",
       x        = NULL
     ) +
@@ -102,18 +185,25 @@ create_vaccine_plot <- function(data, vaccine_type) {
 # -----------------------------------------------
 
 # create the plots  & combine them
-plot_h1n1     <- create_vaccine_plot(labels_df, "h1n1")
-plot_seasonal <- create_vaccine_plot(labels_df, "seasonal")
+plot_h1n1 <- create_vaccine_plot(labels_df, "h1n1") +
+  ggtitle("H1N1 Vaccination Rates")
+plot_seasonal <- create_vaccine_plot(labels_df, "seasonal") +
+  ylab(NULL) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  ggtitle("Seasonal Vaccination Rates")
 
 vaccine_plots <- plot_h1n1 + plot_seasonal +
   plot_layout(ncol = 2, guides = "collect") +
   plot_annotation(
     title = "Vaccination Rates for H1N1 and Seasonal Flu",
-    theme = theme(plot.title = element_text(size = 16, face = "bold",
+    theme = theme(plot.title = element_text(size = 15, face = "bold",
                                             hjust = 0.5))
   )
 
 vaccine_plots
+
+
 # -----------------------------------------------
 # 6. OBSERVATION OF VACCINATION RATE PLOT 
 # -----------------------------------------------
@@ -168,8 +258,8 @@ cross_tab_df$Label <- paste0(cross_tab_df$Count, "\n(", round(cross_tab_df$Perce
 
 # Create heatmap we need
 heatmap_plot <- ggplot(cross_tab_df, aes(x = Seasonal, y = H1N1, fill = Percentage)) +
-  geom_tile(color = "white", size = 0.5) +
-  geom_text(aes(label = Label), color = "white", fontface = "bold", size = 4) +
+  geom_tile(color = "white", size = 0.5, lwd = 1.5, linetype = 1) +
+  geom_text(aes(label = Label), color = "white", fontface = "bold", linewidth = 4) +
   scale_fill_viridis_c(option = "D", direction = -1) +
   labs(
     title = "Relationship Between H1N1 and Seasonal Flu Vaccination",
@@ -177,7 +267,8 @@ heatmap_plot <- ggplot(cross_tab_df, aes(x = Seasonal, y = H1N1, fill = Percenta
                      round(cor(labels_df$h1n1_vaccine, labels_df$seasonal_vaccine), 3)),
     fill = "Percentage (%)"
   ) +
-  coord_fixed()
+  coord_fixed() +
+  scale_fill_gradient(low = "gray", high = "#6E7FC2")
 
 #------------------------------
 # 8.  CROSS-TABULATION ANALYSIS VISUALIZATION
@@ -207,6 +298,9 @@ heatmap_plot
 #------------------------------
 #10. JOINING FEATURES AND LABELS + config
 #------------------------------
+
+# Reload Data
+features_df <- read.csv("Data/training_set_features.csv")
 
 joined_df <- features_df %>%
   inner_join(labels_df, by = "respondent_id") %>%
@@ -362,14 +456,14 @@ vaccination_rate_plot <- function(col, target, data, title = NULL, thresh = 10) 
       fill = target_label
     )) +
       geom_col(width = 0.7) +
-      geom_text(
-        data = filter(counts, !!sym(target) == 1),
-        aes(label = paste0(round(percentage, 1), "%")),
-        position = position_stack(vjust = 0.5),
-        color = "white",
-        fontface = "bold",
-        size = 3
-      ) +
+      # geom_text(
+      #   data = filter(counts, !!sym(target) == 1),
+      #   aes(label = paste0(round(percentage, 1), "%")),
+      #   position = position_stack(vjust = 0.5),
+      #   color = "white",
+      #   fontface = "bold",
+      #   size = 3
+      # ) +
       scale_fill_manual(values = vaccine_colors) +
       # Only show levels that exist in the data
       scale_y_discrete(drop = TRUE) +
@@ -419,7 +513,7 @@ cols_to_plot <- c(
   "education"
 )
 
-#Better naming of varibale here
+#Better naming of variable here
 for (col in cols_to_plot) {
   pretty <- tools::toTitleCase(gsub("_"," ",col))
   t1 <- paste("H1N1 Vaccination Rate by", pretty)
@@ -432,8 +526,10 @@ for (col in cols_to_plot) {
 # Here you can just pick a feature you are interested in looking
 #since h1n1_plots is list
 #up to you man
-h1n1_list_plots <- (h1n1_plots$h1n1_concern + h1n1_plots$h1n1_knowledge ) /
-  (h1n1_plots$opinion_h1n1_vacc_effective + h1n1_plots$age_group ) +
+h1n1_list_plots <- (h1n1_plots$h1n1_concern + ggtitle("H1N1 Vaccination Rate by H1N1 Concern") +
+                      h1n1_plots$h1n1_knowledge + ggtitle("H1N1 Vaccination Rate by H1N1 Concern")) /
+  (h1n1_plots$opinion_h1n1_vacc_effective + ggtitle("H1N1 Vaccination Rate by Opinion on Effectiveness") +
+     h1n1_plots$age_group ) +
   plot_layout(guides = "collect") +
   plot_annotation(
     title = "Key Factors Influencing H1N1 Vaccination",
@@ -442,8 +538,8 @@ h1n1_list_plots <- (h1n1_plots$h1n1_concern + h1n1_plots$h1n1_knowledge ) /
 
 h1n1_list_plots
 
-seasonal_list_plots <- (seasonal_plots$h1n1_concern +
-                             seasonal_plots$opinion_seas_risk) /
+seasonal_list_plots <- (seasonal_plots$h1n1_concern + ggtitle("Seasonal Vaccination Rate by H1N1 Concern") +
+                             seasonal_plots$opinion_seas_risk + ggtitle("Seasonal Vaccination Rate by Opinion on Risk")) /
   (seasonal_plots$age_group + seasonal_plots$education) +
   plot_layout(guides = "collect") +
   plot_annotation(
@@ -544,8 +640,8 @@ missing_summary %>% filter(missing > 0)
 missing_plot <- ggplot(missing_summary %>% filter(missing > 0), 
                        aes(x = reorder(feature, missing), y = percent, fill = feature_type)) +
   geom_bar(stat = "identity") +
-  geom_text(aes(label = sprintf("%.1f%%", percent)), hjust = -0.1, size = 3) +
-  scale_fill_manual(values = cb_palette[c(1, 3, 5, 7)]) +
+#  geom_text(aes(label = sprintf("%.1f%%", percent)), hjust = -0.1, size = 3) +
+  scale_fill_manual(values = cb_palette[c(1, 3, 7)]) +
   coord_flip() +
   labs(
     title = "Missing Values by Feature",
@@ -554,6 +650,44 @@ missing_plot <- ggplot(missing_summary %>% filter(missing > 0),
     y = "Missing Values (%)",
     fill = "Feature Type"
   ) +
-  theme(axis.text.y = element_text(size = 8))
+  theme(axis.text.y = element_text(size = 8)) +
+  scale_x_discrete(labels = c(
+    "respondent_id" = "Respondend ID",
+    "h1n1_concern" = "H1N1 Concern",
+    "h1n1_knowledge" = "H1N1 Knowledge",
+    "behavioral_antiviral_meds" = "Antiviral Medication",
+    "behavioral_avoidance" = "Avoidance",
+    "behavioral_face_mask" = "Face Mask",
+    "behavioral_wash_hands" = "Wash Hands",
+    "behavioral_large_gatherings" = "Large Gatherings",
+    "behavioral_outside_home" = "Outside Home",
+    "behavioral_touch_face" = "Touch Face",
+    "doctor_recc_h1n1" = "Doctor Recommendation H1N1",
+    "doctor_recc_seasonal" = "Doctor Recommendation Seasonal",
+    "chronic_med_condition" = "Chronical Medical Condition",
+    "child_under_6_months" = "Child under 6 Months",
+    "health_worker" = "Health Worker",
+    "health_insurance" = "Health Insurance",
+    "opinion_h1n1_vacc_effective" = "Opinion H1N1 Effect",
+    "opinion_h1n1_risk" = "Opinion H1N1 Risk",
+    "opinion_h1n1_sick_from_vacc" = "Opinion H1N1 sick from Vaccine",
+    "opinion_seas_vacc_effective" = "Opinion Seasonal Effect",
+    "opinion_seas_risk" = "Opinion Seasonal Risk",
+    "opinion_seas_sick_from_vacc" = "Opinion Seasonal sick from Vaccine",
+    "age_group" = "Age Group",
+    "education" = "Education Level",
+    "race" = "Race",
+    "sex" = "Sex",
+    "income_poverty" = "Income Level",
+    "marital_status" = "Marital Status",
+    "rent_or_own" = "Housing Situation",
+    "employment_status" = "Employment Status",
+    "hhs_geo_region" = "Geographical Region",
+    "census_msa" = "Metropolitan Statistical Areas",
+    "household_adults" = "Number of other Adults in Household",
+    "household_children" = "Number of Children in Household",
+    "employment_industry" = "Working Industry",
+    "employment_occupation" = "Type of Occupation"
+  ))
 
 missing_plot
