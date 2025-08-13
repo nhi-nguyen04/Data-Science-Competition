@@ -1,5 +1,5 @@
-# This is a better version of random forest
-#We implemented some changes to reduce run time
+# Predicting H1N1 and Seasonal Flu Vaccine Uptake
+# A tidymodels approach with ridge logistic regression
 
 
 # -----------------------------------------------
@@ -13,7 +13,7 @@ library(future)
 library(vip) # for variable importance
 library(skimr)
 library(stacks)
-library(kableExtra)
+set.seed(6)
 
 
 # -----------------------------------------------
@@ -94,31 +94,33 @@ test_df <- test_df %>%
     across(all_of(binary_vars), ~ factor(.x, levels = c(0, 1)))
   )
 glimpse(train_df)
+dim(train_df)
 
 # -----------------------------------------------
 # 4. CREATE TWO SEPARATE SPLITS (ONE PER TARGET)---> Avoids class imbalance
 # -----------------------------------------------
-set.seed(9678)
-
 #Ensures random split with similar distribution of the outcome variable 
+set.seed(921)
+
 data_split_h1n1 <- initial_split(train_df, prop = 0.8, strata = h1n1_vaccine)
 train_data_h1n1 <- training(data_split_h1n1)
 eval_data_h1n1  <- testing(data_split_h1n1)
-set.seed(92398)
+set.seed(4513)
 
 data_split_seas <- initial_split(train_df, prop = 0.8, strata = seasonal_vaccine)
 train_data_seas <- training(data_split_seas)
 eval_data_seas  <- testing(data_split_seas)
 # -----------------------------------------------
-# 5. SPECIFY BASE MODEL (RPART TREE)
+# 5. SPECIFY BASE MODEL 
 # -----------------------------------------------
-rf_model <- rand_forest() %>%
+xgb_model <- boost_tree() %>%
+  # Set the mode
   set_mode("classification") %>%
-  set_engine("ranger", importance = "impurity")
-
+  # Set the engine
+  set_engine("xgboost")
 
 # -----------------------------------------------
-# 6. R E C I P E –– Optimized for H1N1 (Tree-based models)
+# 6. R E C I P E  –– consistent imputation + dummies
 # -----------------------------------------------
 # Keep the recipe basic — no interactions
 h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
@@ -126,10 +128,9 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   step_rm(seasonal_vaccine) %>%
   
   # Step 1: Impute + encode
-  step_impute_mode(all_nominal_predictors()) %>%
   step_impute_median(all_numeric_predictors()) %>%
-  #step_unknown(all_nominal_predictors()) %>%
-  #step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+  step_unknown(all_nominal_predictors()) %>%
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
   
   # Step 2: Interactions (after dummy encoding)
   step_interact(terms = ~ starts_with("doctor_recc_h1n1_"):starts_with("opinion_h1n1_vacc_effective_")) %>%
@@ -141,7 +142,7 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   # Step 3: Final cleanup
   step_zv(all_predictors())
 #not need for tree based model
-# step_normalize(all_numeric_predictors())
+ # step_normalize(all_numeric_predictors())
 
 
 
@@ -152,10 +153,9 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   step_rm(h1n1_vaccine) %>%
   
   # Step 1: Impute + encode
-  step_impute_mode(all_nominal_predictors()) %>%
   step_impute_median(all_numeric_predictors()) %>%
-  #step_unknown(all_nominal_predictors()) %>%
-  #step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+  step_unknown(all_nominal_predictors()) %>%
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
   
   # Step 2: Interactions (after dummy encoding, using dummy names)
   step_interact(terms = ~ starts_with("opinion_seas_vacc_effective_"):starts_with("opinion_seas_risk_")) %>%
@@ -169,110 +169,104 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
 #not need for tree based model
 # step_normalize(all_numeric_predictors())
 
+
 # -----------------------------------------------
 # 7.WORKFLOWS
 # -----------------------------------------------
-rf_wf_h1n1 <- workflow() %>%
+xgb_wf_h1n1 <- workflow() %>%
   add_recipe(h1n1_recipe) %>%
-  add_model(rf_model)
+  add_model(xgb_model)
 
-rf_wf_seas <- workflow() %>%
+xgb_wf_seas <- workflow() %>%
   add_recipe(seas_recipe) %>%
-  add_model(rf_model)
+  add_model(xgb_model)
 
 
 # -----------------------------------------------
-# 8.Train the workflow --> A lot goes behind the scene here
+# 8.Train the workflow
 # -----------------------------------------------
-#Here Training and test dataset are created
-#recipe trained and applied
-# 
-# rf_h1n1_dt_wkfl_fit <- rf_wf_h1n1 %>%
-#   last_fit(split = data_split_h1n1)
-# 
-# rf_seas_dt_wkfl_fit <- rf_wf_seas %>%
-#   last_fit(split = data_split_seas)
+xgb_h1n1_dt_wkfl_fit <- xgb_wf_h1n1 %>%
+  last_fit(split = data_split_h1n1)
 
+xgb_seas_dt_wkfl_fit <- xgb_wf_seas %>%
+  last_fit(split = data_split_seas)
 
-
- #saveRDS(rf_h1n1_dt_wkfl_fit, "results/section8_rf_h1n1_dt_wkfl_fit.rds")
- #saveRDS(rf_seas_dt_wkfl_fit, "results/section8_rf_seas_dt_wkfl_fit.rds")
-
-
-rf_h1n1_dt_wkfl_fit     <- readRDS("Model/random-forest-rds/section8_rf_h1n1_dt_wkfl_fit.rds")
-rf_seas_dt_wkfl_fit     <- readRDS("Model/random-forest-rds/section8_rf_seas_dt_wkfl_fit.rds")
 
 
 
 # -----------------------------------------------
-# 9.Model Evaluation -->Calculate performance metrics on test data(20% of the trainning data)
+# 9.Calculate performance metrics on test data
 # -----------------------------------------------
-#predictions and metrics are generated with test dataset
-rf_metrics_h1n1 <- rf_h1n1_dt_wkfl_fit %>% 
+xgb_metrics_h1n1 <- xgb_h1n1_dt_wkfl_fit %>% 
   collect_metrics()
 
-rf_metrics_seas <- rf_seas_dt_wkfl_fit %>% 
+xgb_metrics_seas <- xgb_seas_dt_wkfl_fit %>% 
   collect_metrics()
 
 # 1. Pull out predictions (with class‐probabilities)
-rf_h1n1_preds <- collect_predictions(rf_h1n1_dt_wkfl_fit)
-rf_seas_preds <- collect_predictions(rf_seas_dt_wkfl_fit)
+xgb_h1n1_preds <- collect_predictions(xgb_h1n1_dt_wkfl_fit)
+xgb_seas_preds <- collect_predictions(xgb_seas_dt_wkfl_fit)
 
 # 2. Compute ROC curve data
-rf_roc_h1n1 <- roc_curve(rf_h1n1_preds, truth = h1n1_vaccine, .pred_1)
-rf_roc_seas <- roc_curve(rf_seas_preds, truth = seasonal_vaccine, .pred_1)
+xgb_roc_h1n1 <- roc_curve(xgb_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+xgb_roc_seas <- roc_curve(xgb_seas_preds, truth = seasonal_vaccine, .pred_1)
 
-# 2a. Plot separately  ROC curves
-autoplot(rf_roc_h1n1) + 
-  ggtitle("H1N1 Vaccine ROC Curve")
+# 3a. Plot separately
+autoplot(xgb_roc_h1n1) + 
+  ggtitle("H1N1 Vaccine ROC Curve (XGBoost)")
 
-autoplot(rf_roc_seas) + 
-  ggtitle("Seasonal Vaccine ROC Curve")
+autoplot(xgb_roc_seas) + 
+  ggtitle("Seasonal Vaccine ROC Curve (XGBoost)")
+
+
+
+
+
+
 
 #2b.Calcualte the ROC AUC VALUES
-roc_auc(rf_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+roc_auc(xgb_h1n1_preds, truth = h1n1_vaccine, .pred_1)
 
-roc_auc(rf_seas_preds, truth = seasonal_vaccine, .pred_1)
+roc_auc(xgb_seas_preds, truth = seasonal_vaccine, .pred_1)
 
 
 #confusion matrix
 
 # Compute confusion matrix with Heatmap for counts
- rf_h1n1_preds %>%
+xgb_h1n1_preds %>%
   conf_mat(truth = h1n1_vaccine, estimate = .pred_class) %>%
   autoplot(type = "heatmap")
 
-rf_seas_preds %>%
+xgb_seas_preds %>%
   conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
   autoplot(type = "heatmap")
 
 # Compute confusion matrix with mosaic plots for visualization of sensitivity and specitivity
-rf_h1n1_preds %>%
+xgb_h1n1_preds %>%
   conf_mat(truth = h1n1_vaccine, estimate = .pred_class) %>%
   autoplot(type = "mosaic")
 
-rf_seas_preds %>%
+xgb_seas_preds %>%
   conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
   autoplot(type = "mosaic")
 
-#custom metric predictions --> we added f1 score
-custom_metrics <- metric_set(accuracy,sens,spec,roc_auc,f_meas)
+#custom metric predictions 
+custom_metrics <- metric_set(accuracy,sens,spec,roc_auc)
 
+custom_metrics(xgb_h1n1_preds,truth = h1n1_vaccine, estimate = .pred_class,.pred_1)
+custom_metrics(xgb_seas_preds,truth = seasonal_vaccine, estimate = .pred_class,.pred_1)
 
-custom_metrics(rf_h1n1_preds,truth = h1n1_vaccine, estimate = .pred_class,.pred_1)
-custom_metrics(rf_seas_preds,truth = seasonal_vaccine, estimate = .pred_class,.pred_1)
 
 # -----------------------------------------------
-# 10.Cross Validation--> Estimating performance with CV
+# 10.Cross Validation
 # -----------------------------------------------
-#Cross-validation gives you a more robust estimate of your out-of-sample performance without 
-#the statistical pitfalls - it assesses your model more profoundly.
-
-#For speed
-#plan(multisession, workers = 8) 
+# Cross-validation gives you a more robust estimate of your out-of-sample performance without 
+# the statistical pitfalls - it assesses your model more profoundly.
+ 
+# For speed
 
 set.seed(290)
-h1n1_folds <- vfold_cv(train_data_h1n1, 
+h1n1_folds <- vfold_cv(train_data_h1n1,
                        v = 10,
                        strata = h1n1_vaccine)
 
@@ -280,7 +274,7 @@ h1n1_folds
 
 set.seed(291)
 
-seasonal_folds <- vfold_cv(train_data_seas, 
+seasonal_folds <- vfold_cv(train_data_seas,
                            v = 10,
                            strata = seasonal_vaccine)
 
@@ -290,44 +284,39 @@ seasonal_folds
 data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 
-# Fit resamples
-
-# rf_h1n1_dt_rs <- rf_wf_h1n1 %>%
-#   fit_resamples(resamples = h1n1_folds,
-#                 metrics = data_metrics)
-# 
-# rf_seasonal_dt_rs <- rf_wf_seas %>%
-#   fit_resamples(resamples = seasonal_folds,
-#                 metrics = data_metrics)
-# 
-# saveRDS(rf_h1n1_dt_rs, "results/section10_rf_h1n1_dt_rs.rds")
-#  saveRDS(rf_seasonal_dt_rs, "results/section10_rf_seasonal_dt_rs.rds")
-
-
- rf_h1n1_dt_rs           <- readRDS("Model/random-forest-rds/section10_rf_h1n1_dt_rs.rds")
-rf_seasonal_dt_rs       <- readRDS("Model/random-forest-rds/section10_rf_seasonal_dt_rs.rds")
-
-# View performance metrics
-
 # Some info from data camp course:
 # A very high in-sample AUC like can be an indicator of overfitting. 
 # It is also possible that the dataset is just very well structured, or the model might just be terrific
 # To check which of these is true, we need to produce out-of-sample estimates of the AUC, and because 
 # we don't want to touch the test set yet, we can produce these using cross-validation on the training set.
 
-rf_rs_metrics_h1n1 <- rf_h1n1_dt_rs %>% 
+
+# Fit resamples
+xgb_h1n1_dt_rs <- xgb_wf_h1n1 %>%
+  fit_resamples(resamples = h1n1_folds,
+                metrics = data_metrics)
+
+xgb_seasonal_dt_rs <- xgb_wf_seas %>%
+  fit_resamples(resamples = seasonal_folds,
+                metrics = data_metrics)
+
+
+# View performance metrics
+
+xgb_rs_metrics_h1n1 <- xgb_h1n1_dt_rs %>% 
   collect_metrics()
 
-rf_rs_metrics_seas <- rf_seasonal_dt_rs %>% 
+xgb_rs_metrics_seas <- xgb_seasonal_dt_rs %>% 
   collect_metrics()
+
 
 
 # Detailed cross validation results
-rf_h1n1_dt_rs_results <- rf_h1n1_dt_rs %>% 
+xgb_h1n1_dt_rs_results <- xgb_h1n1_dt_rs %>% 
   collect_metrics(summarize = FALSE)
 
-# Explore model performance for decision tree
-rf_h1n1_dt_rs_results %>% 
+# Explore model performance for xgboost
+xgb_h1n1_dt_rs_results %>% 
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
             median = median(.estimate),
@@ -335,154 +324,133 @@ rf_h1n1_dt_rs_results %>%
             sd = sd(.estimate))
 
 
-rf_seasonal_dt_rs_results <- rf_seasonal_dt_rs %>% 
+xgb_seasonal_dt_rs_results <- xgb_seasonal_dt_rs %>% 
   collect_metrics(summarize = FALSE)
 
-# Explore model performance for decision tree
-rf_seasonal_dt_rs_results %>% 
+# Explore model performance for xgboost
+xgb_seasonal_dt_rs_results %>% 
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
             median = median(.estimate),
             max = max(.estimate),
             sd = sd(.estimate))
-
-#For H1N1  Flu Vaccine
-#We have used cross validation to evaluate the performance of your random forest  workflow. 
-#Across the 10 cross validation folds, the average area under the ROC curve was ... . 
-#The average sensitivity and specificity were ... and ..., respectively.
-
-#For  Seasonal Flu Vaccine
-#We have used cross validation to evaluate the performance of your random forest  workflow. 
-#Across the 10 cross validation folds, the average area under the ROC curve was ... . 
-#The average sensitivity and specificity were ... and ..., respectively.
-
-
-#Use this to compare against other model types
 
 
 # -----------------------------------------------
 # 11.Hyperparameter tuning
 # -----------------------------------------------
-#This is the new updated version
-# 1) Declare the tunable model spec
-rf_dt_tune_model <- 
-  rand_forest(
-    mtry  = tune(),      # will become mtry.ratio
-    min_n = tune(),      # your existing tuning
-    trees = tune()       # tunes num.trees
+plan(multisession, workers = 16) 
+
+xgb_dt_tune_model <- 
+  boost_tree(
+    trees       = tune(),    # nrounds ∈ [1, 5000]
+    tree_depth  = tune(),    # max_depth ∈ [1, 20]
+    learn_rate  = tune(),    # eta ∈ [1e−4, 1], log-scale
+    sample_size = tune()     # subsample ∈ [0.1, 1]
   ) %>%
   set_engine(
-    "ranger",
-    importance      = "impurity",
-    sample.fraction = tune()  # include if you want to tune this
+    "xgboost",nthread = 1
   ) %>%
   set_mode("classification")
 
-rf_dt_tune_model
+
+xgb_dt_tune_model
 
 
 # Create a tuning workflow
-rf_h1n1_tune_wkfl <- rf_wf_h1n1 %>% 
+xgb_h1n1_tune_wkfl <- xgb_wf_h1n1 %>% 
   # Replace model
-  update_model(rf_dt_tune_model)
+  update_model(xgb_dt_tune_model)
 
-rf_h1n1_tune_wkfl
+xgb_h1n1_tune_wkfl
 
 
-rf_seas_tune_wkfl <- rf_wf_seas %>% 
+xgb_seas_tune_wkfl <- xgb_wf_seas %>% 
   # Replace model
-  update_model(rf_dt_tune_model)
+  update_model(xgb_dt_tune_model)
 
-rf_seas_tune_wkfl
-
-
+xgb_seas_tune_wkfl
 
 
-# 2) Build the default parameter set
-rf_params <- parameters(rf_dt_tune_model)
-
-# 3) Override only the ranges you care about
-rf_params <- rf_params %>% update(
-  mtry            = mtry(range = c(0, 1)),          # mtry.ratio in [0,1]
-  trees           = trees(range = c(1, 2000)),      # num.trees in [1,2000]
-  sample.fraction = sample_prop(range = c(0.1, 1))  # sample.fraction in [0.1,1]
+xgb_params <- parameters(
+  trees(range = c(1L, 5000L)),                                    # nrounds
+  tree_depth(range = c(1L, 20L)),                                 # max_depth
+  learn_rate(range = c(1e-4, 1), trans = scales::log10_trans()),  # eta
+  sample_prop(range = c(0.1, 1))                                  # subsample
 )
+# 4) Finalize any data-dependent params (like mtry for RF; not strictly needed here,
+#    but good practice if you ever tune something that depends on # predictors)
+xgb_h1n1_params <- finalize(xgb_params, train_data_h1n1)
+xgb_seas_params <- finalize(xgb_params, train_data_seas)
 
-# 4) Finalize any data‐dependent settings
-rf_h1n1_params <- finalize(rf_params, train_data_h1n1)
-rf_seas_params <- finalize(rf_params, train_data_seas)
+
 
 # Finalize parameter ranges for both
-# rf_h1n1_params  <- finalize(parameters(rf_dt_tune_model), train_data_h1n1)
-# rf_seas_params  <- finalize(parameters(rf_dt_tune_model), train_data_seas)
+# xgb_h1n1_params  <- finalize(parameters(xgb_dt_tune_model), train_data_h1n1)
+# xgb_seas_params  <- finalize(parameters(xgb_dt_tune_model), train_data_seas)
 
 # Hyperparameter tuning with grid search
 
-# For speed
+
 
 
 set.seed(214)
-#Increased grid random from 50 to 60 and about to test to server
-rf_h1n1_grid <- grid_random(rf_h1n1_params, size = 500)
+xgb_h1n1_grid <- grid_random(xgb_h1n1_params, size = 500)
 
 set.seed(215)
-rf_seas_grid <- grid_random(rf_seas_params, size = 500)
+xgb_seas_grid <- grid_random(xgb_seas_params, size = 500)
 
 
 ctrl_grid <- control_stack_grid()      # for tune_grid()
 ctrl_res <- control_stack_resamples()  # for fit_resamples()
 
 # Hyperparameter tuning
-# rf_h1n1_dt_tuning <- rf_h1n1_tune_wkfl %>%
-#   tune_grid(resamples = h1n1_folds,
-#             grid = rf_h1n1_grid,
-#             metrics = data_metrics,
-#             control = control_stack_grid())
-#
-#
-# rf_seas_dt_tuning <- rf_seas_tune_wkfl %>%
-#   tune_grid(resamples = seasonal_folds,
-#             grid = rf_seas_grid,
-#             metrics = data_metrics,
-#             control = control_stack_grid())
+xgb_h1n1_dt_tuning <- xgb_h1n1_tune_wkfl %>%
+  tune_grid(resamples = h1n1_folds,
+            grid = xgb_h1n1_grid,
+            metrics = data_metrics,
+            control = control_stack_grid())
 
-# saveRDS(rf_h1n1_dt_tuning, "results/section11_rf_h1n1_dt_tuning.rds")
-# saveRDS(rf_seas_dt_tuning, "results/section11_rf_seas_dt_tuning.rds")
 
-rf_h1n1_dt_tuning       <- readRDS("Model/random-forest-rds/section11_rf_h1n1_dt_tuning.rds")
-rf_seas_dt_tuning       <- readRDS("Model/random-forest-rds/section11_rf_seas_dt_tuning.rds")
+xgb_seas_dt_tuning <- xgb_seas_tune_wkfl %>%
+  tune_grid(resamples = seasonal_folds,
+            grid = xgb_seas_grid,
+            metrics = data_metrics,
+            control = control_stack_grid())
+
 
 
 
 # View results
-rf_h1n1_dt_tuning %>% 
+xgb_h1n1_dt_tuning %>% 
   collect_metrics()
 
 
 # View results
-rf_seas_dt_tuning %>% 
+xgb_seas_dt_tuning %>% 
   collect_metrics()
 
 
 # Collect detailed tuning results
-rf_h1n1_dt_tuning_results <- rf_h1n1_dt_tuning %>% 
+xgb_h1n1_dt_tuning_results <- xgb_h1n1_dt_tuning %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore detailed ROC AUC results for each fold
-rf_h1n1_dt_tuning_results %>% 
-  filter(.metric == "roc_auc") %>% 
+xgb_h1n1_dt_tuning_results %>% 
+  filter(.metric == 'roc_auc') %>% 
   group_by(id) %>% 
   summarize(min_roc_auc = min(.estimate),
             median_roc_auc = median(.estimate),
             max_roc_auc = max(.estimate))
 
+
 # Collect detailed tuning results
-rf_seas_dt_tuning_results <- rf_seas_dt_tuning %>% 
+xgb_seas_dt_tuning_results <- xgb_seas_dt_tuning %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore detailed ROC AUC results for each fold
-rf_seas_dt_tuning_results %>% 
-  filter(.metric == "roc_auc") %>% 
+xgb_seas_dt_tuning_results %>% 
+  filter(.metric == 'roc_auc') %>% 
   group_by(id) %>% 
   summarize(min_roc_auc = min(.estimate),
             median_roc_auc = median(.estimate),
@@ -492,67 +460,61 @@ rf_seas_dt_tuning_results %>%
 # -----------------------------------------------
 # 12.Selecting the best model
 # -----------------------------------------------
-# Display 5 best performing models
-rf_h1n1_dt_tuning %>% 
-  show_best(metric = "roc_auc", n = 5)
 
-rf_seas_dt_tuning %>% 
-  show_best(metric = "roc_auc", n = 5)
+# Display 5 best performing models
+xgb_h1n1_dt_tuning %>% 
+  show_best(metric = 'roc_auc', n = 5)
+
+xgb_seas_dt_tuning %>% 
+  show_best(metric = 'roc_auc', n = 5)
+
 
 
 # Select based on best performance
-rf_best_h1n1_dt_model <- rf_h1n1_dt_tuning %>% 
+xgb_best_h1n1_dt_model <- xgb_h1n1_dt_tuning %>% 
   # Choose the best model based on roc_auc
   select_best(metric = 'roc_auc')
 
-rf_best_h1n1_dt_model
+xgb_best_h1n1_dt_model
 
 
-rf_best_seas_dt_model <- rf_seas_dt_tuning %>% 
+xgb_best_seas_dt_model <- xgb_seas_dt_tuning %>% 
   # Choose the best model based on roc_auc
   select_best(metric = 'roc_auc')
 
-rf_best_seas_dt_model
+xgb_best_seas_dt_model
 
 
 # -----------------------------------------------
 # 13.Finalize your workflow
 # -----------------------------------------------
-rf_final_h1n1_tune_wkfl <- rf_h1n1_tune_wkfl %>% 
-  finalize_workflow(rf_best_h1n1_dt_model)
+xgb_final_h1n1_tune_wkfl <- xgb_h1n1_tune_wkfl %>% 
+  finalize_workflow(xgb_best_h1n1_dt_model)
 
-rf_final_h1n1_tune_wkfl
+xgb_final_h1n1_tune_wkfl
 
 
-rf_final_seas_tune_wkfl <- rf_seas_tune_wkfl %>% 
-  finalize_workflow(rf_best_seas_dt_model)
+xgb_final_seas_tune_wkfl <- xgb_seas_tune_wkfl %>% 
+  finalize_workflow(xgb_best_seas_dt_model)
 
-rf_final_seas_tune_wkfl
+xgb_final_seas_tune_wkfl
 
 
 # -----------------------------------------------
 # 14. LAST_FIT ON THE HELD-OUT SPLITS
 # -----------------------------------------------
-#Here Training and test dataset are created
-#recipe trained and applied
-#Tune random forest trained with entire training dataset
-rf_h1n1_final_fit <- 
-  rf_final_h1n1_tune_wkfl %>% 
+xgb_h1n1_final_fit <- xgb_final_h1n1_tune_wkfl %>% 
   last_fit(split = data_split_h1n1)
 
-rf_seas_final_fit <- 
-  rf_final_seas_tune_wkfl %>% 
+xgb_seas_final_fit <- xgb_final_seas_tune_wkfl %>% 
   last_fit(split = data_split_seas)
 
 
 #-----------------------------------------------
 # 15. COLLECT METRICS
 # -----------------------------------------------
-#predictions and metrics are generated with test dataset
-rf_h1n1_final_fit %>% collect_metrics()
-rf_seas_final_fit  %>% collect_metrics()
-
-#If section 15 and 11(last part) have similar scores it mean the modle will perform similarly in new datasets
+xgb_h1n1_final_fit %>% collect_metrics()
+xgb_seas_final_fit  %>% collect_metrics()
 
 
 # -----------------------------------------------
@@ -562,30 +524,32 @@ rf_seas_final_fit  %>% collect_metrics()
 #library(ggplot2)
 
 # 1) Pull out predictions (with probabilities)
-rf_aftr_tunning_h1n1_preds <- rf_h1n1_final_fit %>% 
+xgb_aftr_tunning_h1n1_preds <- xgb_h1n1_final_fit %>% 
   collect_predictions()
-rf_aftr_tunning_seas_preds <- rf_seas_final_fit  %>%
+xgb_aftr_tunning_seas_preds <- xgb_seas_final_fit  %>% 
   collect_predictions()
 
 # 2) Compute ROC curve data
-rf_aftr_tunning_roc_h1n1 <- roc_curve(rf_aftr_tunning_h1n1_preds, truth = h1n1_vaccine, .pred_1)
-rf_aftr_tunning_roc_seas <- roc_curve(rf_aftr_tunning_seas_preds, truth = seasonal_vaccine, .pred_1)
+xgb_aftr_tunning_roc_h1n1 <- roc_curve(xgb_aftr_tunning_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+xgb_aftr_tunning_roc_seas <- roc_curve(xgb_aftr_tunning_seas_preds, truth = seasonal_vaccine, .pred_1)
 
 # 3a) Plot separately
-autoplot(rf_aftr_tunning_roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve (Random Forest)")
-autoplot(rf_aftr_tunning_roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve (Random Forest)")
+autoplot(xgb_aftr_tunning_roc_h1n1) +
+  ggtitle("Final H1N1 Vaccine ROC Curve (XGBoost)")
+autoplot(xgb_aftr_tunning_roc_seas) + 
+  ggtitle("Final Seasonal Vaccine ROC Curve(XGBoost)")
 
 
 # -----------------------------------------------
 # 17. TRAIN FINAL MODELS ON FULL TRAINING DATA
 # -----------------------------------------------
-rf_final_h1n1 <- fit(rf_final_h1n1_tune_wkfl, train_df)
-rf_final_seas <- fit(rf_final_seas_tune_wkfl, train_df)
+xgb_final_h1n1 <- fit(xgb_final_h1n1_tune_wkfl, train_df)
+xgb_final_seas <- fit(xgb_final_seas_tune_wkfl, train_df)
 
 
 # Here I am checking for variable importance
-vip::vip(rf_final_h1n1, num_features= 10)
-vip::vip(rf_final_seas,  num_features= 10)
+vip::vip(xgb_final_h1n1, num_features= 15)
+vip::vip(xgb_final_seas,  num_features= 15)
 
 
 # -----------------------------------------------
@@ -598,25 +562,26 @@ test_df_prepared <- test_df %>%
     seasonal_vaccine = factor(NA, levels = c(1, 0)),
     strata = NA_character_)
 
-test_pred_h1n1_random_forest <- predict(rf_final_h1n1, test_df_prepared, type = "prob") %>% 
+test_pred_h1n1_xgboost <- predict(xgb_final_h1n1, test_df_prepared, type = "prob") %>%
   pull(.pred_1)
-test_pred_seas_random_forest <- predict(rf_final_seas, test_df_prepared, type = "prob") %>% 
+test_pred_seas_xgboost <- predict(xgb_final_seas, test_df_prepared, type = "prob") %>% 
   pull(.pred_1)
 
-head(test_pred_h1n1_random_forest)
-head(test_pred_seas_random_forest)
+head(test_pred_h1n1_xgboost)
+head(test_pred_seas_xgboost)
 
 
 # -----------------------------------------------
 # 19. CREATE SUBMISSION FILE
 # -----------------------------------------------
-submission_random_forest <- tibble(
+submission_xgboost <- tibble(
   respondent_id = test_df$respondent_id,
-  h1n1_vaccine = test_pred_h1n1_random_forest,
-  seasonal_vaccine = test_pred_seas_random_forest)
+  h1n1_vaccine = test_pred_h1n1_xgboost,
+  seasonal_vaccine = test_pred_seas_xgboost
+)
 
 
 # -----------------------------------------------
 # 20. SAVE SUBMISSION
 # -----------------------------------------------
-write_csv(submission_random_forest, "random_forest_predictions_submission.csv")
+write_csv(submission_xgboost, "xgboost_predictions_submission.csv")
