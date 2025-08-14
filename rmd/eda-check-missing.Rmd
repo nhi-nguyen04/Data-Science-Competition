@@ -1,0 +1,247 @@
+---
+title: "Deeper Missingness Check"
+author: "paulo"
+date: "2025-08-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# List of required packages
+packages <- c(
+  "ggplot2",
+  "dplyr",
+  "tidyr",
+  "patchwork",
+  "scales",
+  "viridis",
+  "grid",
+  "tableone",
+  "knitr",
+  "tidyverse",
+  "naniar",
+  "skimr" # Better overview of the variables
+)
+
+# Function to install missing packages
+install_if_missing <- function(pkg) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    install.packages(pkg)
+  }
+}
+
+# Install missing ones
+invisible(lapply(packages, install_if_missing))
+
+#packages needed
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(patchwork)
+library(scales)
+library(viridis)
+library(grid)   
+library(tableone)
+library(knitr)
+library(tidyverse) 
+library(naniar)
+library(skimr) #Better Overview of the variables
+
+
+# theme set up 
+custom_theme <- theme_minimal() +
+  theme(
+    text            = element_text(color = "#333333"),
+    plot.title      = element_text(face = "bold", size = 14, hjust = 0.5),
+    plot.subtitle   = element_text(size = 11,   hjust = 0.5),
+    axis.title      = element_text(size = 12,   face = "bold"),
+    axis.text       = element_text(size = 10),
+    panel.grid.major= element_line(color = "#EEEEEE"),
+    panel.grid.minor= element_blank(),
+    legend.position = "top",
+    legend.title    = element_text(face = "bold"),
+    legend.text     = element_text(size = 9),
+    plot.margin     = unit(c(10, 20, 10, 10), "pt")
+  )
+theme_set(custom_theme)
+
+# correct color mapping
+vaccine_colors <- c(
+  "Not Vaccinated" = "#F1C45F",
+  "Vaccinated"     = "#1B80BB"
+)
+set.seed(36818)
+
+```
+
+
+
+```{r , include=FALSE}
+#------------------------------
+# 12. DEEPER CHECK ON MISSSIGNESS
+#------------------------------
+data_train <- read_csv("Data/training_set_features.csv")
+data_train_labels <- read_csv("Data/training_set_labels.csv")
+
+# Merge training features and labels
+df <- left_join(data_train, data_train_labels, by = "respondent_id")
+```
+
+```{r , echo=FALSE}
+skim(df)
+
+```
+
+
+```{r , include=FALSE}
+# Identify data types for proper categorization
+df_types <- data.frame(
+  Variable = names(df),
+  Type = sapply(df, class),
+  Is_Categorical = sapply(df, function(x) {
+    # Check if column should be treated as categorical
+    is.character(x) || is.factor(x) || length(unique(x[!is.na(x)])) <= 10
+  })
+)
+
+
+# Reclassify variables based on their actual type (not just R's class)
+categorical_features <- c(
+  "h1n1_concern", "h1n1_knowledge", 
+  "opinion_h1n1_vacc_effective", "opinion_h1n1_risk", "opinion_h1n1_sick_from_vacc",
+  "opinion_seas_vacc_effective", "opinion_seas_risk", "opinion_seas_sick_from_vacc",
+  "age_group", "education", "race", "sex", "income_poverty", "marital_status", 
+  "rent_or_own", "employment_status", "hhs_geo_region", "census_msa",
+  "employment_industry", "employment_occupation"
+)
+
+binary_features <- c(
+  "behavioral_antiviral_meds", "behavioral_avoidance", "behavioral_face_mask",
+  "behavioral_wash_hands", "behavioral_large_gatherings", "behavioral_outside_home",
+  "behavioral_touch_face", "doctor_recc_h1n1", "doctor_recc_seasonal",
+  "chronic_med_condition", "child_under_6_months", "health_worker", "health_insurance",
+  "h1n1_vaccine", "seasonal_vaccine"
+)
+
+numeric_features <- c("household_adults", "household_children")
+
+# Ensure proper classification
+df_updated <- df %>%
+  mutate(across(all_of(categorical_features), as.factor),
+         across(all_of(binary_features), as.factor))
+
+```
+
+
+
+
+
+
+```{r , echo=FALSE}
+# -----------------------------------------------------
+# 12 - a) -. MISSING VALUES ANALYSIS
+# -----------------------------------------------------
+cb_palette <- c(
+  "#E69F00",  # orange
+  "#56B4E9",  # sky blue
+  "#009E73",  # bluish green
+  "#F0E442",  # yellow
+  "#0072B2",  # blue
+  "#D55E00",  # vermillion
+  "#CC79A7"   # reddish purple
+)
+
+# Summary of missing values for all columns
+missing_summary <- df_updated %>%
+  summarise(across(everything(), ~sum(is.na(.)))) %>%
+  pivot_longer(cols = everything(), names_to = "feature", values_to = "missing") %>%
+  mutate(
+    percent = 100 * missing / nrow(df_updated),
+    feature = fct_reorder(feature, missing)
+  ) %>%
+  arrange(desc(missing))
+
+# Add classification of feature type to missing summary
+missing_summary <- missing_summary %>%
+  mutate(
+    feature_type = case_when(
+      feature %in% categorical_features ~ "Categorical",
+      feature %in% binary_features ~ "Binary",
+      feature %in% numeric_features ~ "Numeric",
+      feature == "respondent_id" ~ "ID",
+      TRUE ~ "Other"
+    )
+  )
+```
+
+### Missing values summary
+```{r , echo=FALSE}
+missing_summary %>% filter(missing > 0)%>%
+  mutate(percent = round(percent, 2)) %>%
+  kable()
+
+```
+
+
+
+```{r , echo=FALSE}
+# Create a better missing data visualization
+missing_plot <- ggplot(missing_summary %>% filter(missing > 0), 
+                       aes(x = reorder(feature, missing), y = percent, fill = feature_type)) +
+  geom_bar(stat = "identity") +
+#  geom_text(aes(label = sprintf("%.1f%%", percent)), hjust = -0.1, size = 3) +
+  scale_fill_manual(values = cb_palette[c(1, 3, 7)]) +
+  coord_flip() +
+  labs(
+    title = "Missing Values by Feature",
+    subtitle = "Percentage of missing values for each feature",
+    x = "Feature",
+    y = "Missing Values (%)",
+    fill = "Feature Type"
+  ) +
+  theme(axis.text.y = element_text(size = 8)) +
+  scale_x_discrete(labels = c(
+    "respondent_id" = "Respondend ID",
+    "h1n1_concern" = "H1N1 Concern",
+    "h1n1_knowledge" = "H1N1 Knowledge",
+    "behavioral_antiviral_meds" = "Antiviral Medication",
+    "behavioral_avoidance" = "Avoidance",
+    "behavioral_face_mask" = "Face Mask",
+    "behavioral_wash_hands" = "Wash Hands",
+    "behavioral_large_gatherings" = "Large Gatherings",
+    "behavioral_outside_home" = "Outside Home",
+    "behavioral_touch_face" = "Touch Face",
+    "doctor_recc_h1n1" = "Doctor Recommendation H1N1",
+    "doctor_recc_seasonal" = "Doctor Recommendation Seasonal",
+    "chronic_med_condition" = "Chronical Medical Condition",
+    "child_under_6_months" = "Child under 6 Months",
+    "health_worker" = "Health Worker",
+    "health_insurance" = "Health Insurance",
+    "opinion_h1n1_vacc_effective" = "Opinion H1N1 Effect",
+    "opinion_h1n1_risk" = "Opinion H1N1 Risk",
+    "opinion_h1n1_sick_from_vacc" = "Opinion H1N1 sick from Vaccine",
+    "opinion_seas_vacc_effective" = "Opinion Seasonal Effect",
+    "opinion_seas_risk" = "Opinion Seasonal Risk",
+    "opinion_seas_sick_from_vacc" = "Opinion Seasonal sick from Vaccine",
+    "age_group" = "Age Group",
+    "education" = "Education Level",
+    "race" = "Race",
+    "sex" = "Sex",
+    "income_poverty" = "Income Level",
+    "marital_status" = "Marital Status",
+    "rent_or_own" = "Housing Situation",
+    "employment_status" = "Employment Status",
+    "hhs_geo_region" = "Geographical Region",
+    "census_msa" = "Metropolitan Statistical Areas",
+    "household_adults" = "Number of other Adults in Household",
+    "household_children" = "Number of Children in Household",
+    "employment_industry" = "Working Industry",
+    "employment_occupation" = "Type of Occupation"
+  ))
+
+missing_plot
+
+```
+
+
+
