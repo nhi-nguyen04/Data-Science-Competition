@@ -72,7 +72,7 @@ vaccine_colors <- c(
 )
 
 # Sets a random seed for reproducible results.
-set.seed(36818)
+set.seed(6734)
 ```
 
 
@@ -82,54 +82,12 @@ set.seed(36818)
 # 2. LOAD DATA
 # -----------------------------------------------
 features_df <- read.csv("Data/training_set_features.csv")
-labels_df   <- read.csv("Data/training_set_labels.csv")
+labels_df <- read.csv("Data/training_set_labels.csv")
+features_df[features_df == ""] <- NA
+
 ```
 
 ## Missing data inspection
-```{r data-inspection, echo = FALSE}
-# -----------------------------------------------
-# 3.DATA INSPECTION
-# -----------------------------------------------
-
-# Rename labels
-features_df <- features_df %>%
-  rename("Respondend ID" = respondent_id ,
-         "H1N1 Concern" = h1n1_concern,
-         "H1N1 Knowledge" = h1n1_knowledge,
-         "Antiviral Medication" = behavioral_antiviral_meds,
-         "Avoidance" = behavioral_avoidance,
-         "Face Mask" = behavioral_face_mask,
-         "Wash Hands" = behavioral_wash_hands,
-         "Large Gatherings" = behavioral_large_gatherings,
-         "Outside Home" = behavioral_outside_home,
-         "Touch Face" = behavioral_touch_face,
-         "Doctor Recommendation H1N1" = doctor_recc_h1n1,
-         "Doctor Recommendation Seasonal" = doctor_recc_seasonal,
-         "Chronical Medical Condition" = chronic_med_condition,
-         "Child under 6 Months" = child_under_6_months,
-         "Health Worker" = health_worker,
-         "Health Insurance" = health_insurance,
-         "Opinion H1N1 Effect" = opinion_h1n1_vacc_effective,
-         "Opinion H1N1 Risk" = opinion_h1n1_risk,
-         "Opinion H1N1 sick from Vaccine" = opinion_h1n1_sick_from_vacc,
-         "Opinion Seasonal Effect" = opinion_seas_vacc_effective,
-         "Opinion Seasonal Risk" = opinion_seas_risk,
-         "Opinion Seasonal sick from Vaccine" = opinion_seas_sick_from_vacc,
-         "Age Group" = age_group,
-         "Education Level" = education,
-         "Race" = race,
-         "Sex" = sex,
-         "Income Level" = income_poverty,
-         "Marital Status" = marital_status,
-         "Housing Situation" = rent_or_own,
-         "Employment Status" = employment_status,
-         "Geographical Region" = hhs_geo_region,
-         "Metropolitan Statistical Areas" = census_msa,
-         "Number of other Adults in Household" = household_adults,
-         "Number of Children in Household" = household_children,
-         "Working Industry" = employment_industry,
-         "Type of Occupation" = employment_occupation)
-```
 
 
 Visualization of  missing data in the  dataset.  
@@ -201,9 +159,9 @@ gg_miss_var(features_df) +
 #Create plot function
 create_vaccine_plot <- function(data, vaccine_type) {
   var_name <- paste0(vaccine_type, "_vaccine")
-  title    <- sprintf("%s Vaccination Rates",
-                      tools::toTitleCase(vaccine_type))
-  n_obs    <- nrow(data)
+  title <- sprintf("%s Vaccination Rates",
+    tools::toTitleCase(vaccine_type))
+  n_obs <- nrow(data)
   
   data %>%
     count(!!sym(var_name)) %>%
@@ -219,9 +177,8 @@ create_vaccine_plot <- function(data, vaccine_type) {
     geom_col(width = 0.6) +
     scale_fill_manual(values = vaccine_colors) +
     labs(
-#      title    = title,
-      y        = "Percentage (%)",
-      x        = NULL
+      y = "Percentage (%)",
+      x= NULL
     ) +
     theme(legend.position = "none") +
     ylim(0,100)
@@ -369,24 +326,10 @@ joined_df <- features_df %>%
                                 levels = sort(na.omit(unique(household_children))),
                                 ordered = TRUE)
   )
-
-#Some info of the df
-# Display information about the join
-cat(paste("Dataset dimensions after join:", paste(dim(joined_df), collapse = " x ")), "\n")
-cat(paste("Original features dataset:", paste(dim(features_df), collapse = " x ")), "\n")
-cat(paste("Original labels dataset:", paste(dim(labels_df), collapse = " x ")), "\n")
-
-# A check to see if any rows were lost in the join
-if(nrow(joined_df) != nrow(features_df) || nrow(joined_df) != nrow(labels_df)) {
-  cat("WARNING: Some rows were lost during the join operation. This could affect analysis.\n")
-} else {
-  cat("Join completed successfully with no data loss.\n")
-}
-#Nice
 ```
 
 
-```{r , include=FALSE}
+```{r generate-plots, include=FALSE}
 #------------------------------
 # 11. MORE PLOTS ON VACCINATION RATE FOR DIFFERENT FEATURES
 #------------------------------
@@ -402,20 +345,16 @@ vaccination_rate_plot <- function(col, target, data, title = NULL, thresh = 10) 
   if (is.factor(data[[col]]) || is.character(data[[col]])) {
     data <- data %>% filter(as.character(.data[[col]]) != "")
   }
-  
   # Count distinct values actually present in the data
   n_vals <- n_distinct(data[[col]])
-  
   # Get the actual values present in the data
   actual_values <- sort(unique(data[[col]]))
-  
   # Discrete if factor/char or small integer
   if (is.factor(data[[col]]) ||
       is.character(data[[col]]) ||
       (is.numeric(data[[col]]) && n_vals <= thresh)) {
-    
     # For ordered factors like h1n1_concern and h1n1_knowledge,
-    # we need to make sure we preserve the actual levels present in the data
+    # Need to make sure we preserve the actual levels present in the data
     if (is.factor(data[[col]]) && is.ordered(data[[col]])) {
       # Get the actual levels present in the data
       present_levels <- levels(data[[col]])[levels(data[[col]]) %in% actual_values]
@@ -463,19 +402,11 @@ vaccination_rate_plot <- function(col, target, data, title = NULL, thresh = 10) 
     }
     
     ggplot(counts, aes(
-      y = !!sym(col),       # category on y
-      x = percentage,       # percent on x
+      y = !!sym(col),       
+      x = percentage,       
       fill = target_label
     )) +
       geom_col(width = 0.7) +
-      # geom_text(
-      #   data = filter(counts, !!sym(target) == 1),
-      #   aes(label = paste0(round(percentage, 1), "%")),
-      #   position = position_stack(vjust = 0.5),
-      #   color = "white",
-      #   fontface = "bold",
-      #   size = 3
-      # ) +
       scale_fill_manual(values = vaccine_colors) +
       # Only show levels that exist in the data
       scale_y_discrete(drop = TRUE) +
@@ -487,7 +418,6 @@ vaccination_rate_plot <- function(col, target, data, title = NULL, thresh = 10) 
       )
     
   } else {
-    # Continuous → boxplot branch
     ggplot(data, aes(
       x = factor(!!sym(target), levels = c(0, 1),
                  labels = c("Not Vaccinated", "Vaccinated")),
@@ -512,7 +442,7 @@ vaccination_rate_plot <- function(col, target, data, title = NULL, thresh = 10) 
   }
 }
 
-# 6. create & display your grid of H1N1 vs seasonal plots
+# Create & display your grid of H1N1 vs seasonal plots
 h1n1_plots     <- list()
 seasonal_plots <- list()
 
@@ -535,11 +465,10 @@ for (col in cols_to_plot) {
   seasonal_plots[[col]] <- vaccination_rate_plot(col, "seasonal_vaccine", joined_df, t2)
 }
 
-# Here you can just pick a feature you are interested in looking
-#since h1n1_plots is list
-#up to you man
+# Here you can just pick a feature we are interested in looking
+#Since h1n1_plots is list
 h1n1_list_plots <- (h1n1_plots$h1n1_concern + ggtitle("H1N1 Vaccination Rate by H1N1 Concern") +
-                      h1n1_plots$h1n1_knowledge + ggtitle("H1N1 Vaccination Rate by H1N1 Concern")) /
+                      h1n1_plots$h1n1_knowledge + ggtitle("H1N1 Vaccination Rate by H1N1 Knowledge")) /
   (h1n1_plots$opinion_h1n1_vacc_effective + ggtitle("H1N1 Vaccination Rate by Opinion on Effectiveness") +
      h1n1_plots$age_group ) +
   plot_layout(guides = "collect") +
@@ -557,18 +486,18 @@ seasonal_list_plots <- (seasonal_plots$h1n1_concern + ggtitle("Seasonal Vaccinat
     title = "Key Factors Influencing Seasonal Flu Vaccination",
     theme = theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5))
   )
-
 ```
 
 
-```{r , echo=FALSE, fig.width=11}
+```{r h1n1-plots, echo = FALSE, fig.width = 11}
+# H1N1 Vaccine related plots
 h1n1_list_plots
 ```
 
 
 
-```{r , echo=FALSE, fig.width=11}
+```{r seasonal-plots, echo = FALSE, fig.width = 12}
+# Seasonal Vaccine related plots
 seasonal_list_plots
-
 ```
 

@@ -44,6 +44,7 @@ vaccine_colors <- c(
 features_df <- read.csv("Data/training_set_features.csv")
 labels_df   <- read.csv("Data/training_set_labels.csv")
 
+features_df[features_df == ""] <- NA
 # -----------------------------------------------
 # 3. QUICK DATA INSPECTION
 # -----------------------------------------------
@@ -54,7 +55,9 @@ lapply(labels_df, unique)
 
 # Rename labels
 features_df <- features_df %>%
-  rename("Respondend ID" = respondent_id ,
+  rename("Working Industry" = employment_industry,
+         "Type of Occupation" = employment_occupation,
+    "Respondend ID" = respondent_id ,
          "H1N1 Concern" = h1n1_concern,
          "H1N1 Knowledge" = h1n1_knowledge,
          "Antiviral Medication" = behavioral_antiviral_meds,
@@ -87,9 +90,7 @@ features_df <- features_df %>%
          "Geographical Region" = hhs_geo_region,
          "Metropolitan Statistical Areas" = census_msa,
          "Number of other Adults in Household" = household_adults,
-         "Number of Children in Household" = household_children,
-         "Working Industry" = employment_industry,
-         "Type of Occupation" = employment_occupation)
+         "Number of Children in Household" = household_children)
 
 # missing 
 vis_miss(features_df, warn_large_data = FALSE) +
