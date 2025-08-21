@@ -32,7 +32,6 @@ train_df <- train_df %>%
 
 
 # this gives us a break down of the variables in the dataset
-skim(train_df)
 
 # IDENTIFY NUMERIC VS. CATEGORICAL BY TYPE
 # (Rather than manually listing variable names)
@@ -51,10 +50,12 @@ categorical_vars <- setdiff(categorical_vars, c("respondent_id", "h1n1_vaccine",
 # -----------------------------------------------
 # 4. CREATE TWO SEPARATE SPLITS (ONE PER TARGET)
 # -----------------------------------------------
+set.seed(9678)
 data_split_h1n1 <- initial_split(train_df, prop = 0.8, strata = h1n1_vaccine)
 train_data_h1n1 <- training(data_split_h1n1)
 eval_data_h1n1  <- testing(data_split_h1n1)
 
+set.seed(92398)
 data_split_seas <- initial_split(train_df, prop = 0.8, strata = seasonal_vaccine)
 train_data_seas <- training(data_split_seas)
 eval_data_seas  <- testing(data_split_seas)
@@ -89,7 +90,6 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   # Normalize numeric columns
   step_normalize(all_numeric_predictors())
 
-#tidy(h1n1_recipe, number = 4)
 
 
 seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
@@ -101,7 +101,6 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   step_zv(all_predictors()) %>% 
   step_normalize(all_numeric_predictors())
 
-#tidy(seas_recipe, number = 4)
 
 
 # -----------------------------------------------
@@ -129,11 +128,18 @@ xgb_seas_dt_wkfl_fit <- xgb_wf_seas %>%
 # -----------------------------------------------
 # 9.Calculate performance metrics on test data
 # -----------------------------------------------
+
 xgb_metrics_h1n1 <- xgb_h1n1_dt_wkfl_fit %>% 
   collect_metrics()
 
+print("h1n1")
+xgb_metrics_h1n1
+
 xgb_metrics_seas <- xgb_seas_dt_wkfl_fit %>% 
   collect_metrics()
+
+print("seasonal")
+xgb_metrics_seas
 
 # 1. Pull out predictions (with class‐probabilities)
 xgb_h1n1_preds <- collect_predictions(xgb_h1n1_dt_wkfl_fit)
@@ -141,7 +147,10 @@ xgb_seas_preds <- collect_predictions(xgb_seas_dt_wkfl_fit)
 
 # 2. Compute ROC curve data
 xgb_roc_h1n1 <- roc_curve(xgb_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+
+
 xgb_roc_seas <- roc_curve(xgb_seas_preds, truth = seasonal_vaccine, .pred_1)
+
 
 # 3a. Plot separately
 autoplot(xgb_roc_h1n1) + 
@@ -167,6 +176,7 @@ h1n1_folds <- vfold_cv(train_data_h1n1,
 
 h1n1_folds
 
+set.seed(291)
 
 seasonal_folds <- vfold_cv(train_data_seas,
                            v = 10,
@@ -208,7 +218,7 @@ xgb_rs_metrics_seas <- xgb_seasonal_dt_rs %>%
 # Detailed cross validation results
 xgb_h1n1_dt_rs_results <- xgb_h1n1_dt_rs %>% 
   collect_metrics(summarize = FALSE)
-
+print("h1n1")
 # Explore model performance for xgboost
 xgb_h1n1_dt_rs_results %>% 
   group_by(.metric) %>% 
@@ -219,7 +229,7 @@ xgb_h1n1_dt_rs_results %>%
 
 xgb_seasonal_dt_rs_results <- xgb_seasonal_dt_rs %>% 
   collect_metrics(summarize = FALSE)
-
+print("seasonal")
 # Explore model performance for xgboost
 xgb_seasonal_dt_rs_results %>% 
   group_by(.metric) %>% 
@@ -270,10 +280,10 @@ plan(multisession, workers = 4)
 
 
 set.seed(214)
-xgb_h1n1_grid <- grid_random(xgb_h1n1_params, size = 10)
+xgb_h1n1_grid <- grid_random(xgb_h1n1_params, size = 50)
 
 set.seed(215)
-xgb_seas_grid <- grid_random(xgb_seas_params, size = 10)
+xgb_seas_grid <- grid_random(xgb_seas_params, size = 50)
 
 
 # Hyperparameter tuning
@@ -328,7 +338,6 @@ xgb_seas_dt_tuning_results %>%
 # -----------------------------------------------
 # 12.Selecting the best model
 # -----------------------------------------------
-
 # Display 5 best performing models
 xgb_h1n1_dt_tuning %>% 
   show_best(metric = 'roc_auc', n = 5)
@@ -343,6 +352,9 @@ xgb_best_h1n1_dt_model <- xgb_h1n1_dt_tuning %>%
   # Choose the best model based on roc_auc
   select_best(metric = 'roc_auc')
 
+print("The Best model parameters")
+
+print("H1N1")
 xgb_best_h1n1_dt_model
 
 
@@ -350,6 +362,7 @@ xgb_best_seas_dt_model <- xgb_seas_dt_tuning %>%
   # Choose the best model based on roc_auc
   select_best(metric = 'roc_auc')
 
+print("seasonal")
 xgb_best_seas_dt_model
 
 
@@ -381,7 +394,11 @@ xgb_seas_final_fit <- xgb_final_seas_tune_wkfl %>%
 #-----------------------------------------------
 # 15. COLLECT METRICS
 # -----------------------------------------------
+print("H1N1 after tunning roc auc")
 xgb_h1n1_final_fit %>% collect_metrics()
+
+
+print("Seasonal after tunning roc auc")
 xgb_seas_final_fit  %>% collect_metrics()
 
 
@@ -452,4 +469,4 @@ submission_xgboost <- tibble(
 # -----------------------------------------------
 # 20. SAVE SUBMISSION
 # -----------------------------------------------
-write_csv(submission_xgboost, "xgboost-workflow.csv")
+write_csv(submission_xgboost, "xgboost-default-tunning-grid-50")
