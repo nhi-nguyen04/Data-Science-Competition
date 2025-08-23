@@ -207,3 +207,17 @@ We also consider improvement to our best model lightGBM.
 | 2025-07-23 09:38| Logistic Regression (baseline model)|  836 |
 | 2025-07-20 15:49| LightGBM                     |  256 |
 | 2025-08-04 15:50| LightGBM                     |  230 |
+
+
+
+## 📤 Submission Log
+
+| File Name                                   | Date Submitted      |
+|---------------------------------------------|---------------------|
+| logistic_reg__default-tunning.csv           | 2025-05-22 09:53    |
+| decision-trees-default-tunning-grid-100.csv | 2025-06-02 11:01    |
+| bagged_tree_default-tunning-grid-100.csv    | 2025-06-02 19:51    |
+| random_forest_predictions_submission.csv    | 2025-07-18 18:10|
+| logistic_reg_base_model_predictions_submission.csv | 2025-07-23 09:38|
+| lightGBM_predictions_submission.csv         | 2025-08-04 15:50|
+
