@@ -1,10 +1,9 @@
 ---
-title: "Predicting H1N1 and Seasonal Flu vaccination using logistic regression model"
+title: "Predicting H1N1 and Seasonal Flu vaccination using Light Gradient-Boosting model"
 author: "Vanilton Paulo and Nhi Nguyen"
-date: "2025-08-13"
+date: "2025-08-14"
 output: html_document
 ---
-
 <!-- Workload distributions: -->
 
 <!--1.Nhi Nguyen: Section 1 - 6 -->
@@ -12,39 +11,48 @@ output: html_document
 <!-- 2.Vanilton Paulo: Section 7 - 20  -->
 
 ```{r setup, include = FALSE}
-# -----------------------------------------------
-# 1. SET UP ENVIRONMENT
-# -----------------------------------------------
-# For server environments, please comment out lines 20-38 to prevent unnecessary package installation.
+# For server environments, please comment out lines 17-39 to prevent unnecessary package installation.
 
 # List of required packages
 packages <- c(
   "tidyverse",
   "tidymodels",
-  "baguette",
+  "bonsai",
+  "lightgbm",
   "tune",
+  "baguette",
   "future",
-  "vip",    
-  "skimr"
+  "vip",
+  "skimr",
+  "stacks",
+  "finetune",
+  "here"
 )
 
-#Install missing packages
+# Function to install missing packages
 install_if_missing <- function(pkg) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
     install.packages(pkg)
   }
 }
 
+# Install missing packages
 invisible(lapply(packages, install_if_missing))
 
-#Load packages
 library(tidyverse)
 library(tidymodels)
-library(baguette)
+library(bonsai)
+library(lightgbm)
 library(tune)
+library(baguette)
 library(future)
-library(vip) 
+library(vip)
 library(skimr)
+library(stacks)
+library(finetune)
+library(here)
+
+set.seed(6)
 ```
 
 
@@ -52,12 +60,11 @@ library(skimr)
 # -----------------------------------------------
 # 2. LOAD DATA
 # -----------------------------------------------
-train_features <- read_csv("Data/training_set_features.csv")
-train_labels <- read_csv("Data/training_set_labels.csv")
+train_features <- read_csv(here::here("Data", "training_set_features.csv"))
+train_labels <- read_csv(here::here("Data", "training_set_labels.csv"))
 train_df <- left_join(train_features, train_labels, by = "respondent_id")
-test_df <- read_csv("Data/test_set_features.csv")
+test_df <- read_csv(here::here("Data", "test_set_features.csv"))
 ```
-
 
 ## Data Overview
 
@@ -65,8 +72,6 @@ test_df <- read_csv("Data/test_set_features.csv")
 #Provides a concise overview of the data structure.
 glimpse(train_df)
 ```
-
-
 
 ```{r data-preparation, include = FALSE}
 # -----------------------------------------------
@@ -80,14 +85,14 @@ train_df <- train_df %>%
   )
 
 ordinal_vars <- c(
-  "h1n1_concern",                    # 0-3 scale
-  "h1n1_knowledge",                  # 0-2 scale  
-  "opinion_h1n1_vacc_effective",     # 1-5 scale
-  "opinion_h1n1_risk",               # 1-5 scale
-  "opinion_h1n1_sick_from_vacc",     # 1-5 scale
-  "opinion_seas_vacc_effective",     # 1-5 scale
-  "opinion_seas_risk",               # 1-5 scale
-  "opinion_seas_sick_from_vacc"      # 1-5 scale
+  "h1n1_concern",                    
+  "h1n1_knowledge",                  
+  "opinion_h1n1_vacc_effective",     
+  "opinion_h1n1_risk",               
+  "opinion_h1n1_sick_from_vacc",     
+  "opinion_seas_vacc_effective",     
+  "opinion_seas_risk",               
+  "opinion_seas_sick_from_vacc"      
 )
 
 # Variables that should be treated as nominal (unordered factors)
@@ -143,41 +148,39 @@ test_df <- test_df %>%
 # -----------------------------------------------
 # 4. CREATE TWO SEPARATE SPLITS (ONE PER TARGET)---> Avoids class imbalance
 # -----------------------------------------------
-set.seed(9678)
 #Ensures random split with similar distribution of the outcome variable 
+
+set.seed(921)
 data_split_h1n1 <- initial_split(train_df, prop = 0.8, strata = h1n1_vaccine)
 train_data_h1n1 <- training(data_split_h1n1)
 eval_data_h1n1  <- testing(data_split_h1n1)
 
-set.seed(92398)
+set.seed(4513)
 data_split_seas <- initial_split(train_df, prop = 0.8, strata = seasonal_vaccine)
 train_data_seas <- training(data_split_seas)
 eval_data_seas  <- testing(data_split_seas)
 ```
 
 
-
 ```{r model-spec, include = FALSE}
 # -----------------------------------------------
-# 5. SPECIFY BASE MODEL 
+# 5. SPECIFY BASE MODEL
 # -----------------------------------------------
-# Specify a logistic regression classification model using the glmnet engine
-log_spec <- logistic_reg(
-  penalty = 1,
-  mixture = 0
-) %>%
-  set_engine("glmnet") %>%
-  set_mode("classification")
+# Specify a Light Gradient-Boosting (lightgbm) classification model 
+lgbm_model <- boost_tree() %>%
+  set_mode("classification") %>%
+  set_engine("lightgbm", verbose = -1)
 ```
 
 
 ```{r recipe, include = FALSE}
 # -----------------------------------------------
-# 6. R E C I P E –– CREATION OF RECIPES
+# 6. RECIPES –– CREATION OF RECIPES
 # -----------------------------------------------
 # Define a preprocessing recipe for data preparation before modeling
 
-#H1N1 Vaccine recipe 
+
+# H1N1 Vaccine recipe 
 h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   update_role(respondent_id, new_role = "ID") %>%
   step_rm(seasonal_vaccine) %>%
@@ -191,12 +194,11 @@ h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   step_interact(terms = ~ starts_with("opinion_h1n1_vacc_effective_"):starts_with("opinion_h1n1_risk_")) %>%
   step_interact(terms = ~ starts_with("doctor_recc_seasonal_"):starts_with("opinion_seas_vacc_effective_")) %>%
   step_interact(terms = ~ starts_with("opinion_h1n1_sick_from_vacc_"):starts_with("opinion_seas_sick_from_vacc_")) %>%
-  # Step 3: Remove predictors with zero variance (no useful information) + normalization
-  step_zv(all_predictors()) %>%
-  step_normalize(all_numeric_predictors())
+  # Step 3: Remove predictors with zero variance (no useful information)
+  step_zv(all_predictors())
 
 
-#Seasonal Vaccine recipe
+# Seasonal Vaccine recipe
 seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   update_role(respondent_id, new_role = "ID") %>%
   step_rm(h1n1_vaccine) %>%
@@ -210,9 +212,8 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   step_interact(terms = ~ starts_with("opinion_seas_vacc_effective_"):starts_with("doctor_recc_seasonal_")) %>%
   step_interact(terms = ~ starts_with("opinion_h1n1_risk_"):starts_with("opinion_seas_vacc_effective_")) %>%
   step_interact(terms = ~ starts_with("opinion_seas_sick_from_vacc_"):starts_with("opinion_h1n1_sick_from_vacc_")) %>%
-  # Step 3: Remove predictors with zero variance (no useful information) + normalization
-  step_zv(all_predictors()) %>%
-  step_normalize(all_numeric_predictors())
+  # Step 3: Remove predictors with zero variance (no useful information)
+  step_zv(all_predictors())
 ```
 
 
@@ -220,51 +221,53 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
 # -----------------------------------------------
 # 7. WORKFLOWS -- CREATION OF WORKFLOWS
 # -----------------------------------------------
-# Define logistic regression workflow by combining recipe and model
-lr_wf_h1n1 <- workflow() %>%
+# Define lightgbm workflow by combining recipe and model
+lgbm_wf_h1n1 <- workflow() %>%
   add_recipe(h1n1_recipe) %>%
-  add_model(log_spec)
+  add_model(lgbm_model)
 
-lr_wf_seas <- workflow() %>%
+lgbm_wf_seas <- workflow() %>%
   add_recipe(seas_recipe) %>%
-  add_model(log_spec)
+  add_model(lgbm_model)
 ```
 
 
-
-```{r train-workflow, include = FALSE}
+```{r train-workflow, include=FALSE}
 # -----------------------------------------------
-# 8. TRAIN & EVALUATE ON SPLIT
+# 8. BASELINE TRAIN (last_fit)
 # -----------------------------------------------
-lr_h1n1_dt_wkfl_fit <- lr_wf_h1n1 %>% 
-  last_fit(split = data_split_h1n1)
+# lgbm_h1n1_dt_wkfl_fit <- lgbm_wf_h1n1 %>% last_fit(split = data_split_h1n1)
+# lgbm_seas_dt_wkfl_fit <- lgbm_wf_seas %>% last_fit(split = data_split_seas)
 
-lr_seas_dt_wkfl_fit <- lr_wf_seas %>% 
-  last_fit(split = data_split_seas)
+# Load previously saved model results (or run last_fit above if results are needed fresh)
+#Option in case of quick results
+
+lgbm_h1n1_dt_wkfl_fit <- readRDS(
+  here("utils", "lightgbm-rds", "section8_lgbm_h1n1_dt_wkfl_fit.rds")
+)
+
+lgbm_seas_dt_wkfl_fit <- readRDS(
+  here("utils", "lightgbm-rds", "section8_lgbm_seas_dt_wkfl_fit.rds")
+)
 ```
-
 
 
 ```{r model-evalution, echo = FALSE}
 # -----------------------------------------------
-# 9.Model Evaluation -->Calculate performance metrics on test data(20% of the trainning data)
+# 9.Model Evaluation --> Calculate performance metrics on test data(20% of the trainning data)
 # -----------------------------------------------
 #Predictions and metrics are generated with test dataset
-lr_metrics_h1n1 <- lr_h1n1_dt_wkfl_fit %>% 
-  collect_metrics()
-
-lr_metrics_seas <- lr_seas_dt_wkfl_fit %>% 
-  collect_metrics()
+lgbm_metrics_h1n1 <- lgbm_h1n1_dt_wkfl_fit %>% collect_metrics()
+lgbm_metrics_seas <- lgbm_seas_dt_wkfl_fit %>% collect_metrics()
 
 # Pull out predictions (with class‐probabilities)
-lr_h1n1_preds <- collect_predictions(lr_h1n1_dt_wkfl_fit)
-lr_seas_preds <- collect_predictions(lr_seas_dt_wkfl_fit)
+lgbm_h1n1_preds <- collect_predictions(lgbm_h1n1_dt_wkfl_fit)
+lgbm_seas_preds <- collect_predictions(lgbm_seas_dt_wkfl_fit)
 
 # Compute ROC curve data
-lr_roc_h1n1 <- roc_curve(lr_h1n1_preds, truth = h1n1_vaccine, .pred_1)
-lr_roc_seas <- roc_curve(lr_seas_preds, truth = seasonal_vaccine, .pred_1)
+lgbm_roc_h1n1 <- roc_curve(lgbm_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+lgbm_roc_seas <- roc_curve(lgbm_seas_preds, truth = seasonal_vaccine, .pred_1)
 ```
-
 
 
 ## Plot H1N1 Vaccine and Seasonal Vaccine ROC Curve
@@ -272,17 +275,17 @@ lr_roc_seas <- roc_curve(lr_seas_preds, truth = seasonal_vaccine, .pred_1)
 ### H1N1 Vaccine
 
 ```{r h1n1_roc_plot, echo = FALSE}
-# Plot ROC curve for the H1N1 Vaccine logistic regression model
-autoplot(lr_roc_h1n1) + 
-  ggtitle("ROC Curve for H1N1 Vaccine Model")
+# Plot ROC curve for the H1N1 Vaccine lightgbm model
+autoplot(lgbm_roc_h1n1) + 
+  ggtitle("H1N1 Vaccine ROC Curve")
 ```
 
 ### Seasonal Vaccine
 
 ```{r seas_roc_plot, echo = FALSE}
-# Plot ROC curve for the Seasonal Vaccine logistic regression model
-autoplot(lr_roc_seas) + 
-  ggtitle("ROC Curve for Seasonal Vaccine Model")
+# Plot ROC curve for the Seasonal Vaccine lightgbm model
+autoplot(lgbm_roc_seas) + 
+  ggtitle("Seasonal Vaccine ROC Curve")
 ```
 
 
@@ -292,16 +295,15 @@ autoplot(lr_roc_seas) +
 
 ```{r h1n1_roc, echo = FALSE}
 # Calculate ROC AUC for the H1N1 Vaccine 
-roc_auc(lr_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+roc_auc(lgbm_h1n1_preds, truth = h1n1_vaccine, .pred_1)
 ```
 
 ### Seasonal Vaccine
 
 ```{r seas_roc, echo = FALSE}
 # Calculate ROC AUC for the Seasonal Vaccine 
-roc_auc(lr_seas_preds, truth = seasonal_vaccine, .pred_1)
+roc_auc(lgbm_seas_preds, truth = seasonal_vaccine, .pred_1)
 ```
-
 
 ## Confusion matrix with Heatmap for H1N1 and Seasonal Vaccine
 
@@ -309,7 +311,7 @@ roc_auc(lr_seas_preds, truth = seasonal_vaccine, .pred_1)
 
 ```{r h1n1_conf_heat, echo = FALSE}
 # Generate and plot confusion matrix (heatmap) for H1N1 Vaccine predictions
-lr_h1n1_preds %>%
+lgbm_h1n1_preds %>%
   conf_mat(truth = h1n1_vaccine, estimate = .pred_class) %>%
   autoplot(type = "heatmap")
 ```
@@ -318,7 +320,7 @@ lr_h1n1_preds %>%
 
 ```{r seas_conf_heat, echo = FALSE}
 # Generate and plot confusion matrix (heatmap) for Seasonal Vaccine predictions
-lr_seas_preds %>%
+lgbm_seas_preds %>%
   conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
   autoplot(type = "heatmap")
 ```
@@ -329,9 +331,9 @@ lr_seas_preds %>%
 ### H1N1 Vaccine
 
 ```{r h1n1_conf_mos, echo = FALSE}
-#Generate and plot confusion matrix (mosaic) for H1N1 Vaccine predictions
-lr_h1n1_preds %>%
- conf_mat(truth = h1n1_vaccine, estimate = .pred_class) %>%
+# Generate and plot confusion matrix (mosaic) for H1N1 Vaccine predictions
+lgbm_h1n1_preds %>%
+  conf_mat(truth = h1n1_vaccine, estimate = .pred_class) %>%
   autoplot(type = "mosaic")
 ```
 
@@ -339,9 +341,10 @@ lr_h1n1_preds %>%
 
 ```{r seas_conf_mos, echo = FALSE}
 # Generate and plot confusion matrix (mosaic) for Seasonal Vaccine predictions
-lr_seas_preds %>%
+lgbm_seas_preds %>%
   conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
   autoplot(type = "mosaic")
+
 ```
 
 
@@ -355,14 +358,13 @@ custom_metrics <- metric_set(accuracy,sens,spec,roc_auc,f_meas)
 ### H1N1 Vaccine
 
 ```{r h1n1-cust-metrics, echo = FALSE}
-custom_metrics(lr_h1n1_preds,truth = h1n1_vaccine, estimate = .pred_class,.pred_1)
-
+custom_metrics(lgbm_h1n1_preds,truth = h1n1_vaccine, estimate = .pred_class,.pred_1)
 ```
 
 ### Seasonal Vaccine
 
 ```{r seas-cust-metrics, echo = FALSE}
-custom_metrics(lr_seas_preds,truth = seasonal_vaccine, estimate = .pred_class,.pred_1)
+custom_metrics(lgbm_seas_preds,truth = seasonal_vaccine, estimate = .pred_class,.pred_1)
 ```
 
 
@@ -371,13 +373,10 @@ custom_metrics(lr_seas_preds,truth = seasonal_vaccine, estimate = .pred_class,.p
 
 ```{r cross-validation, include = FALSE}
 # -----------------------------------------------
-# 10.Cross Validation--> Estimating performance with CV
+# 10.Cross Validation --> Estimating performance with CV
 # -----------------------------------------------
 #Cross-validation gives a more robust estimate of out-of-sample performance without 
 #the statistical pitfalls - it assesses the model more profoundly.
-
-#For speed
-plan(multisession, workers = 4) 
 
 set.seed(290)
 h1n1_folds <- vfold_cv(train_data_h1n1, 
@@ -399,22 +398,33 @@ data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 
 # Fit resamples
-lr_h1n1_dt_rs <- lr_wf_h1n1 %>% 
-  fit_resamples(resamples = h1n1_folds,
-                metrics = data_metrics)
 
-lr_seasonal_dt_rs <- lr_wf_seas %>% 
-  fit_resamples(resamples = seasonal_folds,
-                metrics = data_metrics)
+# lgbm_h1n1_dt_rs <- lgbm_wf_h1n1 %>%
+#      fit_resamples(resamples = h1n1_folds,
+#                    metrics = data_metrics)
+# 
+# 
+# 
+# lgbm_seasonal_dt_rs <- lgbm_wf_seas %>%
+#      fit_resamples(resamples = seasonal_folds,
+#                    metrics = data_metrics)
 
+# Load previously saved model results (or run fit resamples above if results are needed fresh)
+#Option in case of quick result
+lgbm_h1n1_dt_rs <- readRDS(
+  here("utils", "lightgbm-rds", "section10_lgbm_h1n1_dt_rs.rds")
+)
 
-lr_rs_metrics_h1n1 <- lr_h1n1_dt_rs %>% 
+lgbm_seasonal_dt_rs <- readRDS(
+  here("utils", "lightgbm-rds", "section10_lgbm_seasonal_dt_rs.rds")
+)
+
+lgbm_rs_metrics_h1n1 <- lgbm_h1n1_dt_rs %>% 
   collect_metrics()
 
-lr_rs_metrics_seas <- lr_seasonal_dt_rs %>% 
+lgbm_rs_metrics_seas <- lgbm_seasonal_dt_rs %>% 
   collect_metrics()
 ```
-
 
 
 ### Detailed cross validation results for H1N1 and Seasonal Vaccine
@@ -423,114 +433,120 @@ lr_rs_metrics_seas <- lr_seasonal_dt_rs %>%
 
 ```{r h1n1-cv, echo = FALSE}
 # Detailed cross validation results
-lr_h1n1_dt_rs_results <- lr_h1n1_dt_rs %>% 
+lgbm_h1n1_dt_rs_results <- lgbm_h1n1_dt_rs %>% 
   collect_metrics(summarize = FALSE)
 
-# Explore model performance for decision tree
-lr_h1n1_dt_rs_results %>% 
+# Explore model performance 
+lgbm_h1n1_dt_rs_results %>% 
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
             median = median(.estimate),
             max = max(.estimate),
             sd = sd(.estimate))
 ```
-
 
 
 ### Seasonal Vaccine
 
 ```{r seasonal-cv, echo = FALSE}
-lr_seasonal_dt_rs_results <- lr_seasonal_dt_rs %>% 
+lgbm_seasonal_dt_rs_results <- lgbm_seasonal_dt_rs %>% 
   collect_metrics(summarize = FALSE)
 
-# Explore model performance for decision tree
-lr_seasonal_dt_rs_results %>% 
+# Explore model performance 
+lgbm_seasonal_dt_rs_results %>% 
   group_by(.metric) %>% 
   summarize(min = min(.estimate),
             median = median(.estimate),
             max = max(.estimate),
             sd = sd(.estimate))
 ```
-
 
 
 ## Hyperparameter tuning
 
 ```{r hyperparameter-tuning, include = FALSE}
 # -----------------------------------------------
-# 11.Hyperparameter tuning
-# ----------------------------------------------
+# 11. HYPERPARAMETER TUNING
+# -----------------------------------------------
 # Declare the tunable model spec
-lr_dt_tune_model <- logistic_reg(
-  penalty = tune(),   
-  mixture = tune()    
-) %>%
-  set_engine("glmnet") %>%
-  set_mode("classification")
+lgbm_dt_tune_model <- boost_tree(
+  trees       = tune(),
+  tree_depth  = tune(),
+  learn_rate  = tune(),
+  sample_size = tune(),
+) %>% set_mode("classification") %>% set_engine("lightgbm", verbose = -1)
+
+lgbm_dt_tune_model
 
 
-lr_dt_tune_model
-
-
-# Create a tuning workflow
-lr_h1n1_tune_wkfl <- lr_wf_h1n1 %>% 
-  # Replace model
-  update_model(lr_dt_tune_model)
-
-
+lgbm_h1n1_tune_wkfl <- lgbm_wf_h1n1 %>% update_model(lgbm_dt_tune_model)
 print("H1N1 Vaccine")
-lr_h1n1_tune_wkfl
+lgbm_h1n1_tune_wkfl
 
 
-lr_seas_tune_wkfl <- lr_wf_seas %>% 
-  # Replace model
-  update_model(lr_dt_tune_model)
+lgbm_seas_tune_wkfl <- lgbm_wf_seas %>% update_model(lgbm_dt_tune_model)
 print("Seasonal Vaccine")
+lgbm_seas_tune_wkfl
 
-lr_seas_tune_wkfl
 
+lgbm_default_params <- parameters(lgbm_dt_tune_model)
 
-set.seed(89866)
-
-penalty_range <- penalty(range = c(-4, 4))  # log scale
-mixture_range <- mixture(range = c(0, 1))
-
-log_grid <- grid_regular(penalty_range, mixture_range, levels = 5)
-
-set.seed(214)
-cv_folds_lr_h1n1 <- vfold_cv(train_data_h1n1, v = 10)
-set.seed(215)
-
-cv_folds_lr_seas <- vfold_cv(train_data_seas, v = 10)
-
+lgbm_h1n1_params <- finalize(lgbm_default_params, train_data_h1n1)
+lgbm_seas_params <- finalize(lgbm_default_params, train_data_seas)
 
 # Hyperparameter tuning with grid search
+set.seed(214)
 
-# For speed
-plan(multisession, workers = 4) 
+lgbm_h1n1_grid <- grid_random(lgbm_h1n1_params, size = 500)
 
+set.seed(215)
+lgbm_seas_grid <- grid_random(lgbm_seas_params, size = 500)
+
+
+ctrl_grid <- control_stack_grid()      # for tune_grid()
+ctrl_res <- control_stack_resamples()  # for fit_resamples()
+
+
+doParallel::registerDoParallel()
+
+ctrl_race <- control_race(verbose_elim = TRUE)
 
 # Hyperparameter tuning
-lr_h1n1_dt_tuning <- lr_h1n1_tune_wkfl %>% 
-  tune_grid(resamples = h1n1_folds,
-            grid = log_grid,
-            metrics = data_metrics)
 
+# lgbm_h1n1_dt_tuning <- lgbm_h1n1_tune_wkfl %>%
+#   tune_race_anova(
+#     resamples = h1n1_folds,
+#     grid = lgbm_h1n1_grid,
+#     metrics = data_metrics,
+#     control = ctrl_race
+#   )
+# 
+# lgbm_seas_dt_tuning <- lgbm_seas_tune_wkfl %>%
+#   tune_race_anova(
+#     resamples = seasonal_folds,
+#     grid = lgbm_seas_grid,
+#     metrics = data_metrics,
+#     control = ctrl_race
+#   )
 
-lr_seas_dt_tuning <- lr_seas_tune_wkfl %>% 
-  tune_grid(resamples = seasonal_folds,
-            grid = log_grid,
-            metrics = data_metrics)
+# Load previously saved model results (or run Hyperparameter tuning above if results are needed fresh)
+#Option in case of quick results
+lgbm_h1n1_dt_tuning <- readRDS(
+  here("utils", "lightgbm-rds", "section11_lgbm_h1n1_dt_tuning.rds")
+)
+
+lgbm_seas_dt_tuning <- readRDS(
+  here("utils", "lightgbm-rds", "section11_lgbm_seas_dt_tuning.rds")
+)
 ```
-
 
 ### View results for H1N1 and Seasonal Vaccine
 
 ### H1N1 Vaccine
 
 ```{r h1n1-tune-collect, echo = FALSE}
-# Collect performance metrics from the H1N1 Vaccine logistic regression tuning results
-lr_h1n1_dt_tuning %>% 
+# Collect performance metrics from the H1N1 Vaccine lightgbm tuning results
+lgbm_h1n1_dt_tuning %>% 
   collect_metrics()
 ```
 
@@ -538,25 +554,24 @@ Explore detailed ROC AUC results for each fold
 
 ```{r h1n1-collect-res, echo = FALSE}
 # Collect detailed tuning results
-lr_h1n1_dt_tuning_results <- lr_h1n1_dt_tuning %>% 
+lgbm_h1n1_dt_tuning_results <- lgbm_h1n1_dt_tuning %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore detailed ROC AUC results for each fold
-lr_h1n1_dt_tuning_results %>% 
-  filter(.metric == "roc_auc") %>% 
+lgbm_h1n1_dt_tuning_results %>% 
+  filter(.metric == 'roc_auc') %>% 
   group_by(id) %>% 
   summarize(min_roc_auc = min(.estimate),
             median_roc_auc = median(.estimate),
             max_roc_auc = max(.estimate))
+
 ```
-
-
 
 ### Seasonal Vaccine
 
 ```{r seaso-tune-collect, echo = FALSE}
-# Collect performance metrics from the Seasonal Vaccine logistic regression tuning results
-lr_seas_dt_tuning %>% 
+# Collect performance metrics from the Seasonal Vaccine lightgbm tuning results
+lgbm_seas_dt_tuning %>% 
   collect_metrics()
 ```
 
@@ -564,12 +579,12 @@ Explore detailed ROC AUC results for each fold
 
 ```{r seaso-collect-res, echo = FALSE}
 # Collect detailed tuning results
-lr_seas_dt_tuning_results <- lr_seas_dt_tuning %>% 
+lgbm_seas_dt_tuning_results <- lgbm_seas_dt_tuning %>% 
   collect_metrics(summarize = FALSE)
 
 # Explore detailed ROC AUC results for each fold
-lr_seas_dt_tuning_results %>% 
-  filter(.metric == "roc_auc") %>% 
+lgbm_seas_dt_tuning_results %>% 
+  filter(.metric == 'roc_auc') %>% 
   group_by(id) %>% 
   summarize(min_roc_auc = min(.estimate),
             median_roc_auc = median(.estimate),
@@ -577,45 +592,47 @@ lr_seas_dt_tuning_results %>%
 ```
 
 
+
 # Post-tunning
 
-
 ## Selecting the best model for H1N1 and Seasonal Vaccine
-```{r select-best, echo = FALSE}
+
+
+```{r select-best, echo = FALSE, warning = FALSE}
 # -----------------------------------------------
 # 12.Selecting the best model
 # -----------------------------------------------
 # Display 5 best performing models
 print("H1N1 Vaccine")
-lr_h1n1_dt_tuning %>% 
-  show_best(metric = "roc_auc", n = 5)
+lgbm_h1n1_dt_tuning %>% 
+  show_best(metric = 'roc_auc', n = 5)
 
 print("Seasonal Vaccine")
-lr_seas_dt_tuning %>% 
-  show_best(metric = "roc_auc", n = 5)
-
+lgbm_seas_dt_tuning %>% 
+  show_best(metric = 'roc_auc', n = 5)
 
 # Select based on best performance
-lr_best_h1n1_dt_model <- lr_h1n1_dt_tuning %>% 
+lgbm_best_h1n1_dt_model <- lgbm_h1n1_dt_tuning %>% 
   # Choose the best model based on roc_auc
   select_best(metric = 'roc_auc')
 
-lr_best_seas_dt_model <- lr_seas_dt_tuning %>% 
+lgbm_best_seas_dt_model <- lgbm_seas_dt_tuning %>% 
   # Choose the best model based on roc_auc
   select_best(metric = 'roc_auc')
 ```
+
 
 
 ### H1N1 Vaccine -> Tuned parameters 
 
 ```{r h1n1-best, echo = FALSE}
-lr_best_h1n1_dt_model
+lgbm_best_h1n1_dt_model
 ```
 
 ### Seasonal Vaccine -> Tuned parameters 
 
 ```{r seaso-best, echo = FALSE}
-lr_best_seas_dt_model
+lgbm_best_seas_dt_model
 ```
 
 
@@ -623,19 +640,17 @@ lr_best_seas_dt_model
 # -----------------------------------------------
 # 13.Finalize your workflow
 # -----------------------------------------------
-lr_final_h1n1_tune_wkfl <- lr_h1n1_tune_wkfl %>% 
-  finalize_workflow(lr_best_h1n1_dt_model)
+lgbm_final_h1n1_tune_wkfl <- lgbm_h1n1_tune_wkfl %>% 
+  finalize_workflow(lgbm_best_h1n1_dt_model)
 
-lr_final_h1n1_tune_wkfl
+lgbm_final_h1n1_tune_wkfl
 
 
-lr_final_seas_tune_wkfl <- lr_seas_tune_wkfl %>% 
-  finalize_workflow(lr_best_seas_dt_model)
+lgbm_final_seas_tune_wkfl <- lgbm_seas_tune_wkfl %>% 
+  finalize_workflow(lgbm_best_seas_dt_model)
 
-lr_final_seas_tune_wkfl
+lgbm_final_seas_tune_wkfl
 ```
-
-
 
 
 ```{r last-fit-on-held-out-splits, include = FALSE}
@@ -644,18 +659,16 @@ lr_final_seas_tune_wkfl
 # -----------------------------------------------
 #Here Training and test dataset are created
 #Recipe trained and applied
-#Tune logistic regression trained with entire training dataset
-lr_h1n1_final_fit <- 
-  lr_final_h1n1_tune_wkfl %>% 
+#Tune lightgbm trained with entire training dataset
+lgbm_h1n1_final_fit <- lgbm_final_h1n1_tune_wkfl %>% 
   last_fit(split = data_split_h1n1)
 
-lr_seas_final_fit <- 
-  lr_final_seas_tune_wkfl %>% 
+lgbm_seas_final_fit <- lgbm_final_seas_tune_wkfl %>% 
   last_fit(split = data_split_seas)
 ```
 
 
-
+## Metrics of post tuned model 
 
 ```{r collect-metrics, echo = FALSE}
 #-----------------------------------------------
@@ -663,49 +676,51 @@ lr_seas_final_fit <-
 # -----------------------------------------------
 # Predictions and metrics are generated with test dataset
 print("H1N1 Vaccine")
-lr_h1n1_final_fit %>% collect_metrics()
+lgbm_h1n1_final_fit %>% collect_metrics()
 
 print("Seasonal Vaccine")
-lr_seas_final_fit  %>% collect_metrics()
+lgbm_seas_final_fit  %>% collect_metrics()
 ```
-
 
 
 ```{r post-tuning-roc-curve, include = FALSE}
 # -----------------------------------------------
 # 16. ROC CURVE VISUALIZATION (via last_fit results)
 # -----------------------------------------------
+
 # Pull out predictions (with probabilities)
-lr_aftr_tunning_h1n1_preds <- lr_h1n1_final_fit %>% 
+lgbm_aftr_tunning_h1n1_preds <- lgbm_h1n1_final_fit %>% 
   collect_predictions()
-lr_aftr_tunning_seas_preds <- lr_seas_final_fit  %>%
+lgbm_aftr_tunning_seas_preds <- lgbm_seas_final_fit  %>% 
   collect_predictions()
 
 # Compute ROC curve data
-lr_aftr_tunning_roc_h1n1 <- roc_curve(lr_aftr_tunning_h1n1_preds, truth = h1n1_vaccine, .pred_1)
-lr_aftr_tunning_roc_seas <- roc_curve(lr_aftr_tunning_seas_preds, truth = seasonal_vaccine, .pred_1)
+lgbm_aftr_tunning_roc_h1n1 <- roc_curve(lgbm_aftr_tunning_h1n1_preds, truth = h1n1_vaccine, .pred_1)
+lgbm_aftr_tunning_roc_seas <- roc_curve(lgbm_aftr_tunning_seas_preds, truth = seasonal_vaccine, .pred_1)
 ```
 
 ## Roc Curve of post tuned model for H1N1 and Seasonal Vaccine
 
 ### H1N1 Vaccine 
-
 ```{r final-h1n1-roc-plot, echo = FALSE}
-autoplot(lr_aftr_tunning_roc_h1n1) + ggtitle("ROC Curve for Tuned H1N1 Vaccine Classifier")
+autoplot(lgbm_aftr_tunning_roc_h1n1) +
+  ggtitle("Final H1N1 Vaccine ROC Curve (LightGBM)")
 ```
+
 
 ### Seasonal Vaccine 
 ```{r final-seaso-roc-plot, echo = FALSE}
-autoplot(lr_aftr_tunning_roc_seas)  + ggtitle("ROC Curve for Tuned Seasonal Vaccine Classifier")
+autoplot(lgbm_aftr_tunning_roc_seas) + 
+  ggtitle("Final Seasonal Vaccine ROC Curve(LightGBM)")
 ```
 
 
-```{r final_model_training, include = FALSE}
+```{r , include=FALSE}
 # -----------------------------------------------
 # 17. TRAIN FINAL MODELS ON FULL TRAINING DATA
 # -----------------------------------------------
-lr_final_h1n1 <- fit(lr_final_h1n1_tune_wkfl, train_df)
-lr_final_seas <- fit(lr_final_seas_tune_wkfl, train_df)
+lgbm_final_h1n1 <- fit(lgbm_final_h1n1_tune_wkfl, train_df)
+lgbm_final_seas <- fit(lgbm_final_seas_tune_wkfl, train_df)
 ```
 
 
@@ -714,16 +729,17 @@ lr_final_seas <- fit(lr_final_seas_tune_wkfl, train_df)
 ### H1N1 Vaccine 
 
 ```{r h1n1-var-importance, echo = FALSE}
-# Plot top 10 most important features for the final H1N1 Vaccine logistic regression model
-vip::vip(lr_final_h1n1, num_features= 10)
+# Plot top 10 most important features for the final H1N1 Vaccine lightgbm model
+vip::vip(lgbm_final_h1n1, num_features= 10)
 ```
 
 ### Seasonal Vaccine 
 
 ```{r seaso-var-importance, echo = FALSE}
-# Plot top 10 most important features for the final Seasonal Vaccine logistic regression model
-vip::vip(lr_final_seas,  num_features= 10)
+# Plot top 10 most important features for the final Seasonal Vaccine lightgbm model
+vip::vip(lgbm_final_seas,  num_features= 10)
 ```
+
 
 ## Predictions on test data
 
@@ -736,30 +752,33 @@ test_df_prepared <- test_df %>%
   mutate(
     h1n1_vaccine = factor(NA, levels = c(1, 0)),
     seasonal_vaccine = factor(NA, levels = c(1, 0)),
-    strata = NA_character_
-  )
+    strata = NA_character_)
 
-test_pred_h1n1_log_reg <- predict(lr_final_h1n1, test_df_prepared, type = "prob") %>% pull(.pred_1)
-test_pred_seas_log_reg <- predict(lr_final_seas, test_df_prepared, type = "prob") %>% pull(.pred_1)
+test_pred_h1n1_lgbm <- predict(lgbm_final_h1n1, test_df_prepared, type = "prob") %>%
+  pull(.pred_1)
+test_pred_seas_lgbm <- predict(lgbm_final_seas, test_df_prepared, type = "prob") %>% 
+  pull(.pred_1)
 
 print("H1N1 Vaccine")
-head(test_pred_h1n1_log_reg)
+head(test_pred_h1n1_lgbm)
 
 print("Seasonal Vaccine")
-head(test_pred_seas_log_reg)
+head(test_pred_seas_lgbm)
 ```
 
 
-```{r submission, include = FALSE}
+
+```{r submission, include=FALSE}
 # -----------------------------------------------
 # 19. CREATE SUBMISSION FILE
 # -----------------------------------------------
-submission_log_reg <- tibble(
+submission_lightgbm <- tibble(
   respondent_id = test_df$respondent_id,
-  h1n1_vaccine = test_pred_h1n1_log_reg,
-  seasonal_vaccine = test_pred_seas_log_reg
+  h1n1_vaccine = test_pred_h1n1_lgbm,
+  seasonal_vaccine = test_pred_seas_lgbm
 )
 ```
+
 
 
 ```{r submission-file, include = FALSE}
@@ -767,6 +786,7 @@ submission_log_reg <- tibble(
 # 20. SAVE SUBMISSION
 # -----------------------------------------------
 #This is already available
-#write_csv(submission_log_reg, "logistic_reg_base_model_predictions_submission.csv")
+#write_csv(submission_lightgbm, "lightGBM_predictions_submission.csv")
 
 ```
+

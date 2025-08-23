@@ -1,12 +1,7 @@
 # -----------------------------------------------
-#0. Author: Vanilton Paulo + Nhi Nguyen
+#0. Author: Vanilton Paulo
 # -----------------------------------------------
 
-# <!-- Workload distributions: -->
-#   
-#   <!--1.Nhi Nguyen: Section 1 - 6 -->
-#   
-#   <!-- 2.Vanilton Paulo: Section 7 - 20  -->
 
 # -----------------------------------------------
 # 1. SET UP ENVIRONMENT
@@ -20,6 +15,7 @@ library(vip)
 library(skimr)
 library(stacks)
 library(kableExtra)
+set.seed(6)
 
 
 # -----------------------------------------------
@@ -29,86 +25,41 @@ train_features <- read_csv("Data/training_set_features.csv")
 train_labels <- read_csv("Data/training_set_labels.csv")
 train_df <- left_join(train_features, train_labels, by = "respondent_id")
 test_df <- read_csv("Data/test_set_features.csv")
-
 # -----------------------------------------------
-# 3. DATA PREPARATION
+# 3. DATA PREPARATION 
 # -----------------------------------------------
 train_df <- train_df %>%
   mutate(
-    h1n1_vaccine     = factor(h1n1_vaccine, levels = c(1, 0)),
+    h1n1_vaccine = factor(h1n1_vaccine, levels = c(1, 0)),
     seasonal_vaccine = factor(seasonal_vaccine, levels = c(1, 0))
   )
 
+# IDENTIFY NUMERIC VS. CATEGORICAL BY TYPE
+numeric_vars <- train_df %>% select(where(is.numeric)) %>% names()
+categorical_vars <- train_df %>% select(where(is.character), where(is.factor)) %>% names()
 
-ordinal_vars <- c(
-  "h1n1_concern",                    
-  "h1n1_knowledge",                  
-  "opinion_h1n1_vacc_effective",     
-  "opinion_h1n1_risk",               
-  "opinion_h1n1_sick_from_vacc",     
-  "opinion_seas_vacc_effective",     
-  "opinion_seas_risk",               
-  "opinion_seas_sick_from_vacc"      
-)
+# Remove the target + ID 
+numeric_vars <- setdiff(numeric_vars, c("respondent_id"))
+categorical_vars <- setdiff(categorical_vars, c("respondent_id", "h1n1_vaccine", "seasonal_vaccine"))
 
-# Variables that should be treated as nominal (unordered factors)
-nominal_vars <- c(
-  "age_group", "education", "race", "sex", "income_poverty",
-  "marital_status", "rent_or_own", "employment_status",
-  "hhs_geo_region", "census_msa", "employment_industry",
-  "employment_occupation"
-)
-
-# Binary variables (0/1) that should be factors
-binary_vars <- c(
-  "behavioral_antiviral_meds", "behavioral_avoidance", "behavioral_face_mask",
-  "behavioral_wash_hands", "behavioral_large_gatherings", "behavioral_outside_home",
-  "behavioral_touch_face", "doctor_recc_h1n1", "doctor_recc_seasonal",
-  "chronic_med_condition", "child_under_6_months", "health_worker", "health_insurance"
-)
-
-# Count variables (should remain numeric)
-count_vars <- c("household_adults", "household_children")
-
-# Apply transformations
-train_df <- train_df %>%
-  mutate(
-    # Convert ordinal variables to ordered factors
-    across(all_of(ordinal_vars), ~ factor(.x, ordered = TRUE)),
-    
-    # Convert nominal variables to factors
-    across(all_of(nominal_vars), ~ factor(.x)),
-    
-    # Convert binary variables to factors with meaningful labels
-    across(all_of(binary_vars), ~ factor(.x, levels = c(0, 1)))
-  )
-
-# Apply same transformations to test data
-test_df <- test_df %>%
-  mutate(
-    # Convert ordinal variables to ordered factors
-    across(all_of(ordinal_vars), ~ factor(.x, ordered = TRUE)),
-    
-    # Convert nominal variables to factors
-    across(all_of(nominal_vars), ~ factor(.x)),
-    
-    # Convert binary variables to factors with meaningful labels
-    across(all_of(binary_vars), ~ factor(.x, levels = c(0, 1)))
-  )
 # -----------------------------------------------
 # 4. CREATE TWO SEPARATE SPLITS (ONE PER TARGET)---> Avoids class imbalance
 # -----------------------------------------------
+#Ensures random split with similar distribution of the outcome variable 
 set.seed(9678)
 
 #Ensures random split with similar distribution of the outcome variable 
 data_split_h1n1 <- initial_split(train_df, prop = 0.8, strata = h1n1_vaccine)
 train_data_h1n1 <- training(data_split_h1n1)
 eval_data_h1n1  <- testing(data_split_h1n1)
+
 set.seed(92398)
 
 data_split_seas <- initial_split(train_df, prop = 0.8, strata = seasonal_vaccine)
 train_data_seas <- training(data_split_seas)
 eval_data_seas  <- testing(data_split_seas)
+
+
 # -----------------------------------------------
 # 5. SPECIFY BASE MODEL (RPART TREE)
 # -----------------------------------------------
@@ -118,42 +69,43 @@ rf_model <- rand_forest() %>%
 
 
 # -----------------------------------------------
-# 6. R E C I P E –– CREATION OF RECIPES
+# 6. R E C I P E 
 # -----------------------------------------------
-# Define a preprocessing recipe for data preparation before modeling
-
-#H1N1 Vaccine recipe 
 h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   update_role(respondent_id, new_role = "ID") %>%
-  step_rm(seasonal_vaccine) %>%
-  # Step 1: Impute 
-  step_impute_mode(all_nominal_predictors()) %>%
+  step_rm(seasonal_vaccine) %>% # Remove target leakage
+  # 1. Handle missing values first - Order matters!
+  # Impute numericals (median is generally robust for skewed data)
   step_impute_median(all_numeric_predictors()) %>%
-  # Step 2: Interactions 
-  step_interact(terms = ~ starts_with("doctor_recc_h1n1_"):starts_with("opinion_h1n1_vacc_effective_")) %>%
-  step_interact(terms = ~ starts_with("doctor_recc_h1n1_"):starts_with("opinion_h1n1_risk_")) %>%
-  step_interact(terms = ~ starts_with("opinion_h1n1_vacc_effective_"):starts_with("opinion_h1n1_risk_")) %>%
-  step_interact(terms = ~ starts_with("doctor_recc_seasonal_"):starts_with("opinion_seas_vacc_effective_")) %>%
-  step_interact(terms = ~ starts_with("opinion_h1n1_sick_from_vacc_"):starts_with("opinion_seas_sick_from_vacc_")) %>%
-  # Step 3: Remove predictors with zero variance (no useful information)
-  step_zv(all_predictors())
+  # Impute nominals (creates a new level 'unknown' for NAs)
+  step_unknown(all_nominal_predictors()) %>%
+  
+  # 2. Interactions
+  step_interact(terms = ~ doctor_recc_h1n1:opinion_h1n1_vacc_effective:opinion_h1n1_risk) %>%
+  step_interact(terms = ~ doctor_recc_seasonal:opinion_seas_vacc_effective) %>%
+  step_interact(terms = ~ h1n1_concern:opinion_h1n1_risk) %>%
+  step_interact(terms = ~ opinion_h1n1_sick_from_vacc:opinion_seas_sick_from_vacc) %>%
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>% # one_hot=TRUE is generally preferred for tree models
+  # 4. Clean up
+  step_zv(all_predictors()) %>% # Remove zero-variance predictors
+  # Normalization for tree models is optional, but harmless. Keeping for consistency.
+  step_normalize(all_numeric_predictors())
 
 
-#Seasonal Vaccine recipe
+
 seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   update_role(respondent_id, new_role = "ID") %>%
-  step_rm(h1n1_vaccine) %>%
-  # Step 1: Imputation 
-  step_impute_mode(all_nominal_predictors()) %>%
+  step_rm(h1n1_vaccine) %>% # Remove target leakage
+  # 1. Handle missing values first
   step_impute_median(all_numeric_predictors()) %>%
-  # Step 2: Interactions 
-  step_interact(terms = ~ starts_with("opinion_seas_vacc_effective_"):starts_with("opinion_seas_risk_")) %>%
-  step_interact(terms = ~ starts_with("opinion_seas_risk_"):starts_with("doctor_recc_seasonal_")) %>%
-  step_interact(terms = ~ starts_with("opinion_seas_vacc_effective_"):starts_with("doctor_recc_seasonal_")) %>%
-  step_interact(terms = ~ starts_with("opinion_h1n1_risk_"):starts_with("opinion_seas_vacc_effective_")) %>%
-  step_interact(terms = ~ starts_with("opinion_seas_sick_from_vacc_"):starts_with("opinion_h1n1_sick_from_vacc_")) %>%
-  # Step 3: Remove predictors with zero variance (no useful information)
-  step_zv(all_predictors())
+  step_unknown(all_nominal_predictors()) %>%
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+step_interact(terms = ~ opinion_seas_vacc_effective:opinion_seas_risk:doctor_recc_seasonal) %>%
+  step_interact(terms = ~ opinion_h1n1_risk:opinion_seas_vacc_effective) %>%
+  step_interact(terms = ~ opinion_seas_sick_from_vacc:opinion_h1n1_sick_from_vacc) %>%
+  step_zv(all_predictors()) %>% # Remove zero-variance predictors
+  step_normalize(all_numeric_predictors()) # Optional for tree models, but harmless.
+
 # -----------------------------------------------
 # 7.WORKFLOWS
 # -----------------------------------------------
@@ -169,7 +121,7 @@ rf_wf_seas <- workflow() %>%
 # -----------------------------------------------
 # 8.Train the workflow 
 # -----------------------------------------------
-#Here Training and test sets are created
+#Here Training and test dataset are created
 #recipe trained and applied
 
 rf_h1n1_dt_wkfl_fit <- rf_wf_h1n1 %>%
@@ -177,7 +129,6 @@ rf_h1n1_dt_wkfl_fit <- rf_wf_h1n1 %>%
 
 rf_seas_dt_wkfl_fit <- rf_wf_seas %>%
   last_fit(split = data_split_seas)
-
 # -----------------------------------------------
 # 9.Model Evaluation -->Calculate performance metrics on test data(20% of the trainning data)
 # -----------------------------------------------
@@ -229,7 +180,7 @@ rf_seas_preds %>%
   conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
   autoplot(type = "mosaic")
 
-#custom metric predictions --> we added f1 score
+# custom metric predictions --> we added f1 score
 custom_metrics <- metric_set(accuracy,sens,spec,roc_auc,f_meas)
 
 
@@ -242,6 +193,8 @@ custom_metrics(rf_seas_preds,truth = seasonal_vaccine, estimate = .pred_class,.p
 #Cross-validation gives you a more robust estimate of your out-of-sample performance without 
 #the statistical pitfalls - it assesses your model more profoundly.
 
+#For speed
+plan(multisession, workers = 4) 
 
 set.seed(290)
 h1n1_folds <- vfold_cv(train_data_h1n1, 
@@ -263,7 +216,6 @@ data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 
 # Fit resamples
-
 rf_h1n1_dt_rs <- rf_wf_h1n1 %>%
   fit_resamples(resamples = h1n1_folds,
                 metrics = data_metrics)
@@ -271,8 +223,6 @@ rf_h1n1_dt_rs <- rf_wf_h1n1 %>%
 rf_seasonal_dt_rs <- rf_wf_seas %>%
   fit_resamples(resamples = seasonal_folds,
                 metrics = data_metrics)
-
-# View performance metrics
 
 rf_rs_metrics_h1n1 <- rf_h1n1_dt_rs %>% 
   collect_metrics()
@@ -308,17 +258,16 @@ rf_seasonal_dt_rs_results %>%
 # -----------------------------------------------
 # 11.Hyperparameter tuning
 # -----------------------------------------------
-#  Declare the tunable model spec
+# Declare the tunable model spec
 rf_dt_tune_model <- 
   rand_forest(
-    mtry  = tune(),      # will become mtry.ratio
-    min_n = tune(),      # your existing tuning
-    trees = tune()       # tunes num.trees
+    mtry = tune(),      
+    min_n = tune(),      
+    trees = tune()       
   ) %>%
   set_engine(
     "ranger",
-    importance      = "impurity",
-    sample.fraction = tune()  
+    importance = "impurity"
   ) %>%
   set_mode("classification")
 
@@ -341,37 +290,27 @@ rf_seas_tune_wkfl
 
 
 
-
-#  Build the default parameter set
-rf_params <- parameters(rf_dt_tune_model)
-
-# Override only the ranges we care about
-rf_params <- rf_params %>% update(
-  mtry = mtry(range = c(0, 1)),          # mtry.ratio in [0,1]
-  trees  = trees(range = c(1, 2000)),      # num.trees in [1,2000]
-  sample.fraction = sample_prop(range = c(0.1, 1))  # sample.fraction in [0.1,1]
-)
-
-# 4) Finalize any data‐dependent settings
-rf_h1n1_params <- finalize(rf_params, train_data_h1n1)
-rf_seas_params <- finalize(rf_params, train_data_seas)
-
-
+# Finalize parameter ranges for both
+rf_h1n1_params <- finalize(parameters(rf_dt_tune_model), train_data_h1n1)
+rf_seas_params <- finalize(parameters(rf_dt_tune_model), train_data_seas)
 
 # Hyperparameter tuning with grid search
 
+# For speed
+plan(multisession, workers = 4) 
+
+
 set.seed(214)
-rf_h1n1_grid <- grid_random(rf_h1n1_params, size = 500)
+rf_h1n1_grid <- grid_random(rf_h1n1_params, size = 100)
 
 set.seed(215)
-rf_seas_grid <- grid_random(rf_seas_params, size = 500)
+rf_seas_grid <- grid_random(rf_seas_params, size = 100)
 
 
 ctrl_grid <- control_stack_grid()      # for tune_grid()
 ctrl_res <- control_stack_resamples()  # for fit_resamples()
 
 # Hyperparameter tuning
-
 rf_h1n1_dt_tuning <- rf_h1n1_tune_wkfl %>%
   tune_grid(resamples = h1n1_folds,
             grid = rf_h1n1_grid,
@@ -384,6 +323,9 @@ rf_seas_dt_tuning <- rf_seas_tune_wkfl %>%
             grid = rf_seas_grid,
             metrics = data_metrics,
             control = control_stack_grid())
+
+
+
 
 # View results
 rf_h1n1_dt_tuning %>% 
@@ -465,7 +407,7 @@ rf_final_seas_tune_wkfl
 # 14. LAST_FIT ON THE HELD-OUT SPLITS
 # -----------------------------------------------
 #Here Training and test dataset are created
-#Recipe trained and applied
+#recipe trained and applied
 #Tune random forest trained with entire training set
 rf_h1n1_final_fit <- 
   rf_final_h1n1_tune_wkfl %>% 
@@ -486,9 +428,7 @@ rf_seas_final_fit  %>% collect_metrics()
 # -----------------------------------------------
 # 16. ROC CURVE VISUALIZATION (via last_fit results)
 # -----------------------------------------------
-
-
-# Pull out predictions (with probabilities)
+#  Pull out predictions (with probabilities)
 rf_aftr_tunning_h1n1_preds <- rf_h1n1_final_fit %>% 
   collect_predictions()
 rf_aftr_tunning_seas_preds <- rf_seas_final_fit  %>%
@@ -501,6 +441,8 @@ rf_aftr_tunning_roc_seas <- roc_curve(rf_aftr_tunning_seas_preds, truth = season
 # Plot separately
 autoplot(rf_aftr_tunning_roc_h1n1) + ggtitle("Final H1N1 Vaccine ROC Curve (Random Forest)")
 autoplot(rf_aftr_tunning_roc_seas)  + ggtitle("Final Seasonal Vaccine ROC Curve (Random Forest)")
+
+
 # -----------------------------------------------
 # 17. TRAIN FINAL MODELS ON FULL TRAINING DATA
 # -----------------------------------------------
@@ -511,6 +453,7 @@ rf_final_seas <- fit(rf_final_seas_tune_wkfl, train_df)
 # Here I am checking for variable importance
 vip::vip(rf_final_h1n1, num_features= 10)
 vip::vip(rf_final_seas,  num_features= 10)
+
 
 # -----------------------------------------------
 # 18. MAKE PREDICTIONS ON TEST DATA
@@ -543,5 +486,5 @@ submission_random_forest <- tibble(
 # -----------------------------------------------
 # 20. SAVE SUBMISSION
 # -----------------------------------------------
-#alredy available
-#write_csv(submission_random_forest, "random_forest_predictions_submission.csv")
+#Already available
+#write_csv(submission_random_forest, "random_forest_default-tunning-grid-100.csv")

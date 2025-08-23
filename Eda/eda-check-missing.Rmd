@@ -80,8 +80,8 @@ set.seed(36818)
 #------------------------------
 # 12. DEEPER CHECK ON MISSSIGNESS
 #------------------------------
-data_train <- read_csv("Data/training_set_features.csv")
-data_train_labels <- read_csv("Data/training_set_labels.csv")
+data_train <- read_csv(here::here("Data", "training_set_features.csv"))
+data_train_labels <- read_csv(here::here("Data", "training_set_labels.csv"))
 data_train[data_train == ""] <- NA
 
 # Merge training features and labels

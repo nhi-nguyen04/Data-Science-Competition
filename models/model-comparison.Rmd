@@ -3,7 +3,6 @@ title: "Models comparison"
 author: "Vanilton Paulo"
 date: "2025-08-13"
 output:
-  pdf_document: default
   html_document: default
 ---
 
@@ -46,12 +45,15 @@ library(stacks)
 library(kableExtra)
 ```
 
+
+Very important: for the next chunks of code to run, you have to manually run each chunk in the rmd files.This means run each code chunk in a rmd file and not knit the respective rmd file.
+The reason for this is that otherwise these varibales will not be in the Global Environment.
+
 # Pre-tuning results
 
 ### H1N1 Vaccine
 
 ```{r h1n1-pre, echo=FALSE}
-
 # Create a custom metric set for comprehensive evaluation
 multi_metrics <- metric_set(roc_auc, accuracy, sens, spec)
 

@@ -1,4 +1,16 @@
 # -----------------------------------------------
+#0. Author: Vanilton Paulo + Nhi Nguyen
+# -----------------------------------------------
+
+# <!-- Workload distributions: -->
+#   
+#   <!--1.Nhi Nguyen: Section 1 - 6 -->
+#   
+#   <!-- 2.Vanilton Paulo: Section 7 - 20  -->
+
+
+
+# -----------------------------------------------
 # 1. SET UP ENVIRONMENT
 # -----------------------------------------------
 library(tidyverse)
@@ -6,7 +18,7 @@ library(tidymodels)
 library(baguette)
 library(tune)
 library(future)
-library(vip) # for variable importance
+library(vip) 
 library(skimr)
 
 
@@ -14,16 +26,12 @@ library(skimr)
 # 2. LOAD DATA
 # -----------------------------------------------
 train_features <- read_csv("Data/training_set_features.csv")
-train_labels   <- read_csv("Data/training_set_labels.csv")
-train_df       <- left_join(train_features, train_labels, by = "respondent_id")
-test_df        <- read_csv("Data/test_set_features.csv")
-
-glimpse(train_df)
-#skim(train_df)
-#View(train_df)
+train_labels <- read_csv("Data/training_set_labels.csv")
+train_df <- left_join(train_features, train_labels, by = "respondent_id")
+test_df <- read_csv("Data/test_set_features.csv")
 
 # -----------------------------------------------
-# 3. DATA PREPARATION 
+# 3. DATA PREPARATION
 # -----------------------------------------------
 train_df <- train_df %>%
   mutate(
@@ -33,14 +41,14 @@ train_df <- train_df %>%
 
 
 ordinal_vars <- c(
-  "h1n1_concern",                    # 0-3 scale
-  "h1n1_knowledge",                  # 0-2 scale  
-  "opinion_h1n1_vacc_effective",     # 1-5 scale
-  "opinion_h1n1_risk",               # 1-5 scale
-  "opinion_h1n1_sick_from_vacc",     # 1-5 scale
-  "opinion_seas_vacc_effective",     # 1-5 scale
-  "opinion_seas_risk",               # 1-5 scale
-  "opinion_seas_sick_from_vacc"      # 1-5 scale
+  "h1n1_concern",                    
+  "h1n1_knowledge",                  
+  "opinion_h1n1_vacc_effective",     
+  "opinion_h1n1_risk",               
+  "opinion_h1n1_sick_from_vacc",     
+  "opinion_seas_vacc_effective",     
+  "opinion_seas_risk",               
+  "opinion_seas_sick_from_vacc"      
 )
 
 # Variables that should be treated as nominal (unordered factors)
@@ -87,8 +95,6 @@ test_df <- test_df %>%
     # Convert binary variables to factors with meaningful labels
     across(all_of(binary_vars), ~ factor(.x, levels = c(0, 1)))
   )
-glimpse(train_df)
-
 # -----------------------------------------------
 # 4. CREATE TWO SEPARATE SPLITS (ONE PER TARGET)---> Avoids class imbalance
 # -----------------------------------------------
@@ -115,18 +121,16 @@ log_spec <- logistic_reg(
   set_mode("classification")
 
 # -----------------------------------------------
-# 6. R E C I P E  –– consistent imputation + dummies
+# 6. R E C I P E  
 # -----------------------------------------------
-# Keep the recipe basic — no interactions
+
 h1n1_recipe <- recipe(h1n1_vaccine ~ ., data = train_data_h1n1) %>%
   update_role(respondent_id, new_role = "ID") %>%
   step_rm(seasonal_vaccine) %>%
-  
   # Step 1: Impute + encode
   step_impute_median(all_numeric_predictors()) %>%
   step_unknown(all_nominal_predictors()) %>%
   step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
-  
   # Step 2: Interactions (after dummy encoding)
   step_interact(terms = ~ starts_with("doctor_recc_h1n1_"):starts_with("opinion_h1n1_vacc_effective_")) %>%
   step_interact(terms = ~ starts_with("doctor_recc_h1n1_"):starts_with("opinion_h1n1_risk_")) %>%
@@ -151,7 +155,7 @@ seas_recipe <- recipe(seasonal_vaccine ~ ., data = train_data_seas) %>%
   step_unknown(all_nominal_predictors()) %>%
   step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
   
-  # Step 2: Interactions (after dummy encoding, using dummy names)
+  # Step 2: Interactions 
   step_interact(terms = ~ starts_with("opinion_seas_vacc_effective_"):starts_with("opinion_seas_risk_")) %>%
   step_interact(terms = ~ starts_with("opinion_seas_risk_"):starts_with("doctor_recc_seasonal_")) %>%
   step_interact(terms = ~ starts_with("opinion_seas_vacc_effective_"):starts_with("doctor_recc_seasonal_")) %>%
@@ -199,22 +203,22 @@ lr_metrics_h1n1 <- lr_h1n1_dt_wkfl_fit %>%
 lr_metrics_seas <- lr_seas_dt_wkfl_fit %>% 
   collect_metrics()
 
-# 1. Pull out predictions (with class‐probabilities)
+# Pull out predictions (with class‐probabilities)
 lr_h1n1_preds <- collect_predictions(lr_h1n1_dt_wkfl_fit)
 lr_seas_preds <- collect_predictions(lr_seas_dt_wkfl_fit)
 
-# 2. Compute ROC curve data
+# Compute ROC curve data
 lr_roc_h1n1 <- roc_curve(lr_h1n1_preds, truth = h1n1_vaccine, .pred_1)
 lr_roc_seas <- roc_curve(lr_seas_preds, truth = seasonal_vaccine, .pred_1)
 
-# 2a. Plot separately  ROC curves
+# Plot separately  ROC curves
 autoplot(lr_roc_h1n1) + 
   ggtitle("ROC Curve for H1N1 Vaccine Model")
 
 autoplot(lr_roc_seas) + 
   ggtitle("ROC Curve for Seasonal Vaccine Model")
 
-#2b.Calcualte the ROC AUC VALUES
+# Calcualte the ROC AUC VALUES
 roc_auc(lr_h1n1_preds, truth = h1n1_vaccine, .pred_1)
 
 roc_auc(lr_seas_preds, truth = seasonal_vaccine, .pred_1)
@@ -240,7 +244,7 @@ lr_seas_preds %>%
   conf_mat(truth = seasonal_vaccine, estimate = .pred_class)%>%
   autoplot(type = "mosaic")
 
-#custom metric predictions 
+# custom metric predictions 
 custom_metrics <- metric_set(accuracy,sens,spec,roc_auc)
 
 custom_metrics(lr_h1n1_preds,truth = h1n1_vaccine, estimate = .pred_class,.pred_1)
@@ -283,15 +287,6 @@ lr_seasonal_dt_rs <- lr_wf_seas %>%
   fit_resamples(resamples = seasonal_folds,
                 metrics = data_metrics)
 
-
-# View performance metrics
-
-# Some info from data camp course:
-# A very high in-sample AUC like can be an indicator of overfitting. 
-# It is also possible that the dataset is just very well structured, or the model might just be terrific
-# To check which of these is true, we need to produce out-of-sample estimates of the AUC, and because 
-# we don't want to touch the test set yet, we can produce these using cross-validation on the training set.
-
 lr_rs_metrics_h1n1 <- lr_h1n1_dt_rs %>% 
   collect_metrics()
 
@@ -323,26 +318,12 @@ lr_seasonal_dt_rs_results %>%
             max = max(.estimate),
             sd = sd(.estimate))
 
-#For H1N1  Flu Vaccine
-#We have used cross validation to evaluate the performance of your random forest  workflow. 
-#Across the 10 cross validation folds, the average area under the ROC curve was ... . 
-#The average sensitivity and specificity were ... and ..., respectively.
-
-#For  Seasonal Flu Vaccine
-#We have used cross validation to evaluate the performance of your random forest  workflow. 
-#Across the 10 cross validation folds, the average area under the ROC curve was ... . 
-#The average sensitivity and specificity were ... and ..., respectively.
-
-
-#Use this to compare against other model types
-
-
 # -----------------------------------------------
 # 11.Hyperparameter tuning
 # -----------------------------------------------
 lr_dt_tune_model <- logistic_reg(
-  penalty = tune(),   # let penalty be tuned
-  mixture = tune()    # optionally tune mixture (0 = ridge, 1 = lasso)
+  penalty = tune(),   
+  mixture = tune()    
 ) %>%
   set_engine("glmnet") %>%
   set_mode("classification")
@@ -368,7 +349,6 @@ lr_seas_tune_wkfl
 
 set.seed(89866)
 
-#we went from range(-4,1) to this
 penalty_range <- penalty(range = c(-4, 4))  # log scale
 mixture_range <- mixture(range = c(0, 1))
 
@@ -433,8 +413,6 @@ lr_seas_dt_tuning_results %>%
             median_roc_auc = median(.estimate),
             max_roc_auc = max(.estimate))
 
-
-
 # -----------------------------------------------
 # 12.Selecting the best model
 # -----------------------------------------------
@@ -478,7 +456,7 @@ lr_final_seas_tune_wkfl
 # 14. LAST_FIT ON THE HELD-OUT SPLITS
 # -----------------------------------------------
 #Here Training and test dataset are created
-#recipe trained and applied
+#Recipe trained and applied
 #Tune random forest trained with entire training dataset
 lr_h1n1_final_fit <- 
   lr_final_h1n1_tune_wkfl %>% 
@@ -488,35 +466,29 @@ lr_seas_final_fit <-
   lr_final_seas_tune_wkfl %>% 
   last_fit(split = data_split_seas)
 
-
-
 #-----------------------------------------------
 # 15. COLLECT METRICS
 # -----------------------------------------------
-#predictions and metrics are generated with test dataset
+#predictions and metrics are generated with test set
 lr_h1n1_final_fit %>% collect_metrics()
 lr_seas_final_fit  %>% collect_metrics()
-
-
-
 
 # -----------------------------------------------
 # 16. ROC CURVE VISUALIZATION (via last_fit results)
 # -----------------------------------------------
-#library(yardstick)
-#library(ggplot2)
 
-# 1) Pull out predictions (with probabilities)
+
+# Pull out predictions (with probabilities)
 lr_aftr_tunning_h1n1_preds <- lr_h1n1_final_fit %>% 
   collect_predictions()
 lr_aftr_tunning_seas_preds <- lr_seas_final_fit  %>%
   collect_predictions()
 
-# 2) Compute ROC curve data
+# Compute ROC curve data
 lr_aftr_tunning_roc_h1n1 <- roc_curve(lr_aftr_tunning_h1n1_preds, truth = h1n1_vaccine, .pred_1)
 lr_aftr_tunning_roc_seas <- roc_curve(lr_aftr_tunning_seas_preds, truth = seasonal_vaccine, .pred_1)
 
-# 3a) Plot separately
+# Plot separately
 autoplot(lr_aftr_tunning_roc_h1n1) + ggtitle("ROC Curve for Tuned H1N1 Vaccine Classifier")
 autoplot(lr_aftr_tunning_roc_seas)  + ggtitle("ROC Curve for Tuned Seasonal Vaccine Classifier")
 
@@ -527,21 +499,8 @@ lr_final_h1n1 <- fit(lr_final_h1n1_tune_wkfl, train_df)
 lr_final_seas <- fit(lr_final_seas_tune_wkfl, train_df)
 
 # Here I am checking for variable importance
-vip::vip(lr_final_h1n1, num_features= 20)
-vip::vip(lr_final_seas,  num_features= 20)
-
-
-# vip::vi(lr_final_h1n1)%>%
-#   arrange(desc(Importance)) %>%
-#   slice_head(n = 5) %>%
-#   pull(Variable)
-# 
-# 
-# vip::vi(lr_final_seas)%>%
-#   arrange(desc(Importance)) %>%
-#   slice_head(n = 5) %>%
-#   pull(Variable)
-
+vip::vip(lr_final_h1n1, num_features= 10)
+vip::vip(lr_final_seas,  num_features= 10)
 
 # -----------------------------------------------
 # 18. MAKE PREDICTIONS ON TEST DATA
@@ -572,7 +531,5 @@ submission_log_reg <- tibble(
 # -----------------------------------------------
 # 20. SAVE SUBMISSION
 # -----------------------------------------------
-write_csv(submission_log_reg, "logistic_reg_base_model_predictions_submission.csv")
-
-# Print confirmation message
-#cat("Submission file created successfully with", nrow(submission), "predictions.\n")
+#already available
+#write_csv(submission_log_reg, "logistic_reg_base_model_predictions_submission.csv")

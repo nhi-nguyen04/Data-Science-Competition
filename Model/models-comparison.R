@@ -1,3 +1,8 @@
+# -----------------------------------------------
+#0. Author: Vanilton Paulo
+# -----------------------------------------------
+
+
 # ───────────────1.Pre Hypertuning────────────────────────────────
 
 # Create a custom metric set for comprehensive evaluation
@@ -8,8 +13,6 @@ multi_metrics <- metric_set(roc_auc, accuracy, sens, spec)
 #######################
 preds_stacked_pre_tune_h1n1 <- bind_rows(
   lr_h1n1_preds %>% mutate(model = "Logistic Regression"),
-  #dt_h1n1_preds %>% mutate(model = "Decision Trees"),
-  #bt_h1n1_preds %>% mutate(model = "Bagged Trees"),
   rf_h1n1_preds %>% mutate(model = "Random Forest"),
   lgbm_h1n1_preds %>% mutate(model = "lightgbm")
 )
@@ -42,8 +45,6 @@ roc_data_h1n1 %>%
 ##########################
 preds_stacked_pre_tune_seas <- bind_rows(
   lr_seas_preds %>% mutate(model = "Logistic Regression"),
-  #dt_seas_preds %>% mutate(model = "Decision Trees"),
-  #bt_seas_preds %>% mutate(model = "Bagged Trees"),
   rf_seas_preds %>% mutate(model = "Random Forest"),
   lgbm_seas_preds %>% mutate(model = "lightgbm")
 )
@@ -79,8 +80,6 @@ roc_data_seas %>%
 #######################
 preds_stacked_post_tune_h1n1 <- bind_rows(
   lr_aftr_tunning_h1n1_preds %>% mutate(model = "Logistic Regression"),
-  #dt_aftr_tunning_h1n1_preds %>% mutate(model = "Decision Trees"),
-  #bt_aftr_tunning_h1n1_preds %>% mutate(model = "Bagged Trees"),
   rf_aftr_tunning_h1n1_preds %>% mutate(model = "Random Forest"),
   lgbm_aftr_tunning_h1n1_preds %>% mutate(model = "lightgbm")
 )
@@ -113,8 +112,6 @@ roc_data_post_h1n1 %>%
 ##########################
 preds_stacked_post_tune_seas <- bind_rows(
   lr_aftr_tunning_seas_preds %>% mutate(model = "Logistic Regression"),
-  #dt_aftr_tunning_seas_preds %>% mutate(model = "Decision Trees"),
-  #bt_aftr_tunning_seas_preds %>% mutate(model = "Bagged Trees"),
   rf_aftr_tunning_seas_preds %>% mutate(model = "Random Forest"),
   lgbm_aftr_tunning_seas_preds %>% mutate(model = "lightgbm")
 )
