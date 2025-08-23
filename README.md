@@ -117,6 +117,42 @@ In the next meeting with the professor, we will share our results and ask for fe
 Today we are going to optimize tunning spaces together.
 
 
+23/07/2025
+We held a meeting on Discord  at 3:00 PM with full attendance. During the meeting, we discussed our presentation, outlined our plan for presenting our findings, and made the final touches.
+
+
+24/07/205
+
+Presentation day.
+Presentation day went well. 
+Our fellow students gave us positive feedback, and our supervisor didn’t have any negative comments.
+We decided to take a week and a half off to focus on exams.
+
+
+06/08/205
+
+We held a discord meeting at 3:00 pm. All members attended.
+We went over the general feedback and made changes based on it. We also discussed what still needs to be done for the project submission and split up the workload.
+We also consider improvement to our best model lightGBM.
+
+
+
+## Submission Log
+
+| Date/Time       | Description of Approach                    | H1N1 Pre-Tuning ROC | Seasonal Pre-Tuning ROC | H1N1 Post-Tuning ROC | Seasonal Post-Tuning ROC | Public Leaderboard Score | Team Member(s) |
+|-----------------|--------------------------------------------|---------------------|-------------------------|----------------------|--------------------------|--------------------------|----------------|
+| 2025-05-22 09:53| +Log regression baseline(grid search tuning + default params)    |                     |                         |                      | 0.                       |                          | Vanilton       |
+| 2025-06-02 11:01| Decision trees (grid search tuning + default params)| 0.691               | 0.757                   | 0.804                | 0.827                    | 0.8097                       | Vanilton       |
+| 2025-06-02 19:51| Bagged trees (grid search tuning + default params)         | 0.791               | 0.827                   | 0.822                | 0.848                    | 0.8328                   | Vanilton       |
+| 2025-08-18 11:10| +Bagged Trees (with preprocessing)          | 0.702               | 0.731                   | 0.765                | 0.777                    | 0.721                    | Nhi            |
+| 2025-08-19 17:20| +XGBoost (baseline, default params)         | 0.745               | 0.772                   | 0.801                | 0.815                    | 0.759                    | Vanilton       |
+| 2025-08-20 16:05| +XGBoost (grid + feature selection)         | 0.753               | 0.781                   | 0.822                | 0.838                    | 0.774                    | Vanilton, Nhi  |
+| 2025-07-18 18:17| random forest (grid search tuning + mlr3 tunning params)  | 0.826               | 0.853                   | 0.828                | 0.854                    | 0.8393                    | Vanilton, Nhi       |
+| 2025-07-20 15:49| LightGBM (changed data prep + feature eng(recipe)+ANOVA racing for hyperparameter tuning)   | 0.861               | 0.860                   | 0.864                | 0.862                    | 0.8623                    | Vanilton, Nhi  |
+| 2025-07-23 09:38| Log regression baseline(grid search tuning + mlr3 tunning params)| 0.839               | 0.846                   | 0.854                | 0.859                    | 0.8542                    | Vanilton, Nhi            |
+| 2025-08-04 15:50| LightGBM (changed seed for splitting data)   | 0.872               | 0.865                   | 0.875                | 0.867                    | 0.8625                    | Vanilton, Nhi  |
+
+
 ## 🏆 Scores:
 
 - Base Model: 0.8283
