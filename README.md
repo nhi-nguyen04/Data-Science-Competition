@@ -141,10 +141,9 @@ We also consider improvement to our best model lightGBM.
 
 | Date/Time       | Description of Approach                    | H1N1 Pre-Tuning ROC | Seasonal Pre-Tuning ROC | H1N1 Post-Tuning ROC | Seasonal Post-Tuning ROC | Public Leaderboard Score | Team Member(s) |
 |-----------------|--------------------------------------------|---------------------|-------------------------|----------------------|--------------------------|--------------------------|----------------|
-| 2025-05-22 09:53| +Log regression baseline(grid search tuning + default params)    |                     |                         |                      | 0.                       |                          | Vanilton       |
+| 2025-05-22 09:53| Logistic regression baseline(grid search tuning + default params)    | 0.804                    | 0.831                        | 0.823                      | 0.854                       | 0.8349                         | Nhi       |
 | 2025-06-02 11:01| Decision trees (grid search tuning + default params)| 0.691               | 0.757                   | 0.804                | 0.827                    | 0.8097                       | Vanilton       |
 | 2025-06-02 19:51| Bagged trees (grid search tuning + default params)         | 0.791               | 0.827                   | 0.822                | 0.848                    | 0.8328                   | Vanilton       |
-| 2025-08-18 11:10| +Bagged Trees (with preprocessing)          | 0.702               | 0.731                   | 0.765                | 0.777                    | 0.721                    | Nhi            |
 | 2025-08-19 17:20| +XGBoost (baseline, default params)         | 0.745               | 0.772                   | 0.801                | 0.815                    | 0.759                    | Vanilton       |
 | 2025-08-20 16:05| +XGBoost (grid + feature selection)         | 0.753               | 0.781                   | 0.822                | 0.838                    | 0.774                    | Vanilton, Nhi  |
 | 2025-07-18 18:17| random forest (grid search tuning + mlr3 tunning params)  | 0.826               | 0.853                   | 0.828                | 0.854                    | 0.8393                    | Vanilton, Nhi       |
@@ -153,9 +152,11 @@ We also consider improvement to our best model lightGBM.
 | 2025-08-04 15:50| LightGBM (changed seed for splitting data)   | 0.872               | 0.865                   | 0.875                | 0.867                    | 0.8625                    | Vanilton, Nhi  |
 
 
-## 🏆 Scores:
+## 🏆 Leaderboard Ranks
 
-- Base Model: 0.8283
-- Bagged Trees: 0.8324
-- Random Forest: 0.8373
-- XGBoost: 0.8428
+| Date/Time       | Model                        | Rank |
+|-----------------|------------------------------|------|
+| 2025-05-22 09:53| Logistic Regression (baseline model)| 1364 |
+| 2025-07-23 09:38| Logistic Regression (baseline model)|  836 |
+| 2025-07-20 15:49| LightGBM                     |  256 |
+| 2025-08-04 15:50| LightGBM                     |  230 |
