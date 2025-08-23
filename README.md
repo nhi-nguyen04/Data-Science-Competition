@@ -30,6 +30,53 @@ Each row represents an individual, and features include:
 
 The competition uses **Area Under the ROC Curve (AUC-ROC)** as the evaluation metric, computed separately for each vaccine prediction and averaged.
 
+
+
+## 📂 Project Structure & Navigation Guide
+
+This repository is organized into several modules to keep the workflow clear and reproducible. Here’s a quick guide to help you navigate:
+
+### 🔹 `/Data/`
+- Contains the datasets used for modeling and analysis.  
+
+
+### 🔹 `/eda/`
+- Contains **Exploratory Data Analysis (EDA)** work.  
+- Includes two R Markdown (`.Rmd`) files that walk through data cleaning, visualization, and key insights.
+
+### 🔹 `/models/`
+- Holds our **most promising models**.  
+- Includes three R Rmd files with finalized model workflows.
+
+### 🔹 `/report/`
+- Contains the **final project report** in PDF format.  
+- Summarizes methodology, results, and conclusions.
+
+### 🔹 `/presentation/`
+- Contains the project **presentation slides** used for presenting findings.
+
+### 🔹 `/experiments/`
+- Contains all experimental `.R` scripts.  
+- These are raw experiments and tests, useful if you want to **reproduce or rerun** experiments on a server.
+
+### 🔹 `/submission/`
+- Tracks all submissions made during the project.  
+- Includes structured logs and files submitted to the competition platform.
+
+---
+
+### 🚀 How to Use This Repo
+1. **Start with** `/eda/` → to understand the dataset and initial findings.  
+2. **Check `/models/`** → to see the main modeling approaches we tried.  
+3. **Look at `/experiments/`** → if you want to dive deeper into  attempts or reproduce tuning runs on a server.  
+4. **Read `/report/`** → for a polished summary of the entire project.  
+5. **Open `/presentation/`** → for a concise overview of results.  
+6. **Explore `/submission/`** → to acess our submissions files.  
+
+---
+
+This structure ensures that the project is **transparent, reproducible, and easy to follow** for both collaborators and external reviewers.  
+
 ## 📁 Repository Structure
 ```
 ├── Class notes/
