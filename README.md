@@ -77,54 +77,6 @@ This repository is organized into several modules to keep the workflow clear and
 
 This structure ensures that the project is **transparent, reproducible, and easy to follow** for both collaborators and external reviewers.  
 
-## 📁 Repository Structure
-```
-├── Class notes/
-│ ├── Best Practices (1).pdf
-├── Data/
-│ ├── data/
-│ ├── submission_format.csv
-│ ├── test_set_features.csv
-│ ├── training_set_features.csv
-│ └── training_set_labels.csv
-├── Eda/
-│ ├── Basic_Analysis.Rmd
-│ └── best_exploration.R
-│ └── explorative data analysis.R
-├── Model/
-│ └── Model.Rmd
-│ └── ensemble-stack.R
-│ └── testing-Model-Comparison
-│ └── best-comparison.R
-│ └── LightGBM-Workflow.R
-│ └── catboost.R
-│ └── testing.R
-│ └── Comparison.R
-│ └── base-model.R
-│ └── bagged_trees_model.R
-│ └── refined-dt.R
-│ └── xgboost-model.R
-│ └── random-forest-workflow-finalized.R
-│ └── new-recipe/
-│ └── ── recipes.R
-│ └── ── bs-model.R
-│ └── results/
-│ └── ── xxx.rds
-├── Submissions/
-│ └── bagged_tree_workflow.csv
-│ └── finalized_dt_workflow.csv
-│ └── random_forest_workflow-2.csv
-│ └── random_forest_workflow.csv
-│ └── vaccine_predictions_submission-2.csv
-│ └── vaccine_predictions_submission.csv
-│ └── xgboost-workflow.csv
-├── .DS_Store
-├── .Rhistory
-├── .gitignore
-├── Flu.Rproj
-└── README.md
-```
-
 ## 📓 Logbook:
 
 17/05/2025
