@@ -191,8 +191,8 @@ We also consider improvement to our best model lightGBM.
 | 2025-05-22 09:53| Logistic regression baseline(grid search tuning + default params)    | 0.804                    | 0.831                        | 0.823                      | 0.854                       | 0.8349                         | Nhi       |
 | 2025-06-02 11:01| Decision trees (grid search tuning + default params)| 0.691               | 0.757                   | 0.804                | 0.827                    | 0.8097                       | Vanilton       |
 | 2025-06-02 19:51| Bagged trees (grid search tuning + default params)         | 0.791               | 0.827                   | 0.822                | 0.848                    | 0.8328                   | Vanilton       |
-| 2025-08-19 17:20| +XGBoost (baseline, default params)         | 0.745               | 0.772                   | 0.801                | 0.815                    | 0.759                    | Vanilton       |
-| 2025-08-20 16:05| +XGBoost (grid + feature selection)         | 0.753               | 0.781                   | 0.822                | 0.838                    | 0.774                    | Vanilton, Nhi  |
+| 2025-06-08 08:44| Random Forest (grid search tuning + default params)         | 0.826               | 0.854                   | 0.828                | 0.854                    | 0.8397                    | Vanilton       |
+| 2025-08-20 16:05| +XGBoost (grid + feature selection)         | 0.716               | 0.724                   | 0.822                | 0.838                    | 0.774                    | Vanilton  |
 | 2025-07-18 18:17| random forest (grid search tuning + mlr3 tunning params)  | 0.826               | 0.853                   | 0.828                | 0.854                    | 0.8393                    | Vanilton, Nhi       |
 | 2025-07-20 15:49| LightGBM (changed data prep + feature eng(recipe)+ANOVA racing for hyperparameter tuning)   | 0.861               | 0.860                   | 0.864                | 0.862                    | 0.8623                    | Vanilton, Nhi  |
 | 2025-07-23 09:38| Log regression baseline(grid search tuning + mlr3 tunning params)| 0.839               | 0.846                   | 0.854                | 0.859                    | 0.8542                    | Vanilton, Nhi            |
@@ -217,6 +217,7 @@ We also consider improvement to our best model lightGBM.
 | logistic_reg__default-tunning.csv           | 2025-05-22 09:53    |
 | decision-trees-default-tunning-grid-100.csv | 2025-06-02 11:01    |
 | bagged_tree_default-tunning-grid-100.csv    | 2025-06-02 19:51    |
+| random_forest_default-tunning-grid-100.csv  | 2025-06-08 08:44    |
 | random_forest_predictions_submission.csv    | 2025-07-18 18:10|
 | logistic_reg_base_model_predictions_submission.csv | 2025-07-23 09:38|
 | lightGBM_predictions_submission.csv         | 2025-08-04 15:50|
