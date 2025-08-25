@@ -120,7 +120,7 @@ Today we are going to optimize tunning spaces together.
 We held a meeting on Discord  at 3:00 PM with full attendance. During the meeting, we discussed our presentation, outlined our plan for presenting our findings, and made the final touches.
 
 
-24/07/205
+24/07/2025
 
 Presentation day.
 Presentation day went well. 
@@ -128,11 +128,16 @@ Our fellow students gave us positive feedback, and our supervisor didn’t have 
 We decided to take a week and a half off to focus on exams.
 
 
-06/08/205
+06/08/2025
 
 We held a discord meeting at 3:00 pm. All members attended.
 We went over the general feedback and made changes based on it. We also discussed what still needs to be done for the project submission and split up the workload.
 We also consider improvement to our best model lightGBM.
+
+25/08/2025
+
+We attended a meeting on Discord where we discussed which sections of the report need improvement. We have also completed the code portion of our project.
+Now, our tasks are to refine both the presentation and the report, and to start adding content to the appendix section. 
 
 
 
