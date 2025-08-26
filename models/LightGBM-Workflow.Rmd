@@ -236,19 +236,8 @@ lgbm_wf_seas <- workflow() %>%
 # -----------------------------------------------
 # 8. BASELINE TRAIN (last_fit)
 # -----------------------------------------------
-# lgbm_h1n1_dt_wkfl_fit <- lgbm_wf_h1n1 %>% last_fit(split = data_split_h1n1)
-# lgbm_seas_dt_wkfl_fit <- lgbm_wf_seas %>% last_fit(split = data_split_seas)
-
-# Load previously saved model results (or run last_fit above if results are needed fresh)
-#Option in case of quick results
-
-lgbm_h1n1_dt_wkfl_fit <- readRDS(
-  here("utils", "lightgbm-rds", "section8_lgbm_h1n1_dt_wkfl_fit.rds")
-)
-
-lgbm_seas_dt_wkfl_fit <- readRDS(
-  here("utils", "lightgbm-rds", "section8_lgbm_seas_dt_wkfl_fit.rds")
-)
+lgbm_h1n1_dt_wkfl_fit <- lgbm_wf_h1n1 %>% last_fit(split = data_split_h1n1)
+lgbm_seas_dt_wkfl_fit <- lgbm_wf_seas %>% last_fit(split = data_split_seas)
 ```
 
 
@@ -399,25 +388,16 @@ data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 # Fit resamples
 
-# lgbm_h1n1_dt_rs <- lgbm_wf_h1n1 %>%
-#      fit_resamples(resamples = h1n1_folds,
-#                    metrics = data_metrics)
-# 
-# 
-# 
-# lgbm_seasonal_dt_rs <- lgbm_wf_seas %>%
-#      fit_resamples(resamples = seasonal_folds,
-#                    metrics = data_metrics)
+lgbm_h1n1_dt_rs <- lgbm_wf_h1n1 %>%
+     fit_resamples(resamples = h1n1_folds,
+                   metrics = data_metrics)
 
-# Load previously saved model results (or run fit resamples above if results are needed fresh)
-#Option in case of quick result
-lgbm_h1n1_dt_rs <- readRDS(
-  here("utils", "lightgbm-rds", "section10_lgbm_h1n1_dt_rs.rds")
-)
 
-lgbm_seasonal_dt_rs <- readRDS(
-  here("utils", "lightgbm-rds", "section10_lgbm_seasonal_dt_rs.rds")
-)
+
+lgbm_seasonal_dt_rs <- lgbm_wf_seas %>%
+     fit_resamples(resamples = seasonal_folds,
+                   metrics = data_metrics)
+
 
 lgbm_rs_metrics_h1n1 <- lgbm_h1n1_dt_rs %>% 
   collect_metrics()
@@ -513,31 +493,21 @@ ctrl_race <- control_race(verbose_elim = TRUE)
 
 # Hyperparameter tuning
 
-# lgbm_h1n1_dt_tuning <- lgbm_h1n1_tune_wkfl %>%
-#   tune_race_anova(
-#     resamples = h1n1_folds,
-#     grid = lgbm_h1n1_grid,
-#     metrics = data_metrics,
-#     control = ctrl_race
-#   )
-# 
-# lgbm_seas_dt_tuning <- lgbm_seas_tune_wkfl %>%
-#   tune_race_anova(
-#     resamples = seasonal_folds,
-#     grid = lgbm_seas_grid,
-#     metrics = data_metrics,
-#     control = ctrl_race
-#   )
+lgbm_h1n1_dt_tuning <- lgbm_h1n1_tune_wkfl %>%
+  tune_race_anova(
+    resamples = h1n1_folds,
+    grid = lgbm_h1n1_grid,
+    metrics = data_metrics,
+    control = ctrl_race
+  )
 
-# Load previously saved model results (or run Hyperparameter tuning above if results are needed fresh)
-#Option in case of quick results
-lgbm_h1n1_dt_tuning <- readRDS(
-  here("utils", "lightgbm-rds", "section11_lgbm_h1n1_dt_tuning.rds")
-)
-
-lgbm_seas_dt_tuning <- readRDS(
-  here("utils", "lightgbm-rds", "section11_lgbm_seas_dt_tuning.rds")
-)
+lgbm_seas_dt_tuning <- lgbm_seas_tune_wkfl %>%
+  tune_race_anova(
+    resamples = seasonal_folds,
+    grid = lgbm_seas_grid,
+    metrics = data_metrics,
+    control = ctrl_race
+  )
 ```
 
 ### View results for H1N1 and Seasonal Vaccine

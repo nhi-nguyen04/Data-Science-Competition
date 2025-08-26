@@ -80,14 +80,14 @@ train_df <- train_df %>%
   )
 
 ordinal_vars <- c(
-  "h1n1_concern",                    # 0-3 scale
-  "h1n1_knowledge",                  # 0-2 scale  
-  "opinion_h1n1_vacc_effective",     # 1-5 scale
-  "opinion_h1n1_risk",               # 1-5 scale
-  "opinion_h1n1_sick_from_vacc",     # 1-5 scale
-  "opinion_seas_vacc_effective",     # 1-5 scale
-  "opinion_seas_risk",               # 1-5 scale
-  "opinion_seas_sick_from_vacc"      # 1-5 scale
+  "h1n1_concern",                    
+  "h1n1_knowledge",                    
+  "opinion_h1n1_vacc_effective",     
+  "opinion_h1n1_risk",               
+  "opinion_h1n1_sick_from_vacc",     
+  "opinion_seas_vacc_effective",     
+  "opinion_seas_risk",               
+  "opinion_seas_sick_from_vacc"      
 )
 
 # Variables that should be treated as nominal (unordered factors)

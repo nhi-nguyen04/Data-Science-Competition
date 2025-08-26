@@ -15,7 +15,7 @@ output:
 # -----------------------------------------------
 # 1. SET UP ENVIRONMENT
 # -----------------------------------------------
-# For server environments, please comment out lines 20-40 to prevent unnecessary package installation.
+# For server environments, please comment out lines 21-41 to prevent unnecessary package installation.
 
 # List of required packages
 packages <- c(
@@ -82,14 +82,14 @@ train_df <- train_df %>%
   )
 
 ordinal_vars <- c(
-  "h1n1_concern",                    # 0-3 scale
-  "h1n1_knowledge",                  # 0-2 scale  
-  "opinion_h1n1_vacc_effective",     # 1-5 scale
-  "opinion_h1n1_risk",               # 1-5 scale
-  "opinion_h1n1_sick_from_vacc",     # 1-5 scale
-  "opinion_seas_vacc_effective",     # 1-5 scale
-  "opinion_seas_risk",               # 1-5 scale
-  "opinion_seas_sick_from_vacc"      # 1-5 scale
+  "h1n1_concern",                    
+  "h1n1_knowledge",                    
+  "opinion_h1n1_vacc_effective",     
+  "opinion_h1n1_risk",               
+  "opinion_h1n1_sick_from_vacc",     
+  "opinion_seas_vacc_effective",     
+  "opinion_seas_risk",               
+  "opinion_seas_sick_from_vacc"      
 )
 
 # Variables that should be treated as nominal (unordered factors)
@@ -226,22 +226,12 @@ rf_wf_seas <- workflow() %>%
 # 8.Train the workflow 
 # -----------------------------------------------
 
-# rf_h1n1_dt_wkfl_fit <- rf_wf_h1n1 %>%
-#   last_fit(split = data_split_h1n1)
-# 
-# rf_seas_dt_wkfl_fit <- rf_wf_seas %>%
-#   last_fit(split = data_split_seas)
+rf_h1n1_dt_wkfl_fit <- rf_wf_h1n1 %>%
+  last_fit(split = data_split_h1n1)
 
-# Load previously saved model results (or run last_fit above if results are needed fresh)
-#Option in case of quick results
+rf_seas_dt_wkfl_fit <- rf_wf_seas %>%
+  last_fit(split = data_split_seas)
 
-rf_h1n1_dt_wkfl_fit <- readRDS(
-  here("utils", "random-forest-rds", "section8_rf_h1n1_dt_wkfl_fit.rds")
-)
-
-rf_seas_dt_wkfl_fit <- readRDS(
-  here("utils", "random-forest-rds", "section8_rf_seas_dt_wkfl_fit.rds")
-)
 ```
 
 ```{r model-evalution, echo = FALSE}
@@ -388,23 +378,14 @@ data_metrics <- metric_set(accuracy,roc_auc, sens, spec)
 
 # Fit resamples
 
-# rf_h1n1_dt_rs <- rf_wf_h1n1 %>%
-#   fit_resamples(resamples = h1n1_folds,
-#                 metrics = data_metrics)
-# 
-# rf_seasonal_dt_rs <- rf_wf_seas %>%
-#   fit_resamples(resamples = seasonal_folds,
-#                 metrics = data_metrics)
+rf_h1n1_dt_rs <- rf_wf_h1n1 %>%
+  fit_resamples(resamples = h1n1_folds,
+                metrics = data_metrics)
 
-# Load previously saved model results (or run fit resamples above if results are needed fresh)
-#Option in case of quick results
-rf_h1n1_dt_rs <- readRDS(
-  here("utils", "random-forest-rds", "section10_rf_h1n1_dt_rs.rds")
-)
+rf_seasonal_dt_rs <- rf_wf_seas %>%
+  fit_resamples(resamples = seasonal_folds,
+                metrics = data_metrics)
 
-rf_seasonal_dt_rs <- readRDS(
-  here("utils", "random-forest-rds", "section10_rf_seasonal_dt_rs.rds")
-)
 
 rf_rs_metrics_h1n1 <- rf_h1n1_dt_rs %>% 
   collect_metrics()
@@ -460,7 +441,7 @@ rf_dt_tune_model <-
   ) %>%
   set_engine(
     "ranger",
-    importance      = "impurity",
+    importance = "impurity",
     sample.fraction = tune()  
   ) %>%
   set_mode("classification")
@@ -517,28 +498,20 @@ ctrl_res <- control_stack_resamples()  # for fit_resamples()
 
 # Hyperparameter tuning
 
-# rf_h1n1_dt_tuning <- rf_h1n1_tune_wkfl %>%
-#   tune_grid(resamples = h1n1_folds,
-#             grid = rf_h1n1_grid,
-#             metrics = data_metrics,
-#             control = control_stack_grid())
-#
-#
-# rf_seas_dt_tuning <- rf_seas_tune_wkfl %>%
-#   tune_grid(resamples = seasonal_folds,
-#             grid = rf_seas_grid,
-#             metrics = data_metrics,
-#             control = control_stack_grid())
+rf_h1n1_dt_tuning <- rf_h1n1_tune_wkfl %>%
+  tune_grid(resamples = h1n1_folds,
+            grid = rf_h1n1_grid,
+            metrics = data_metrics,
+            control = control_stack_grid())
 
-# Load previously saved model results (or run Hyperparameter tuning above if results are needed fresh)
-#Option in case of quick results
-rf_h1n1_dt_tuning <- readRDS(
-  here("utils", "random-forest-rds", "section11_rf_h1n1_dt_tuning.rds")
-)
 
-rf_seas_dt_tuning <- readRDS(
-  here("utils", "random-forest-rds", "section11_rf_seas_dt_tuning.rds")
-)
+rf_seas_dt_tuning <- rf_seas_tune_wkfl %>%
+  tune_grid(resamples = seasonal_folds,
+            grid = rf_seas_grid,
+            metrics = data_metrics,
+            control = control_stack_grid())
+
+
 ```
 
 ### View results for H1N1 and Seasonal Vaccine

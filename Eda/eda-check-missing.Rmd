@@ -7,8 +7,9 @@ output: html_document
 
 ```{r setup, include = FALSE}
 
-#This section was partially programmed with the help of ChatGPT-4
+#This file was  programmed with the help of ChatGPT-4.But after critical review, we adopted most of the resulting suggestions for #improvement.
 
+#Dear reader if you choose not the install the required package , you can comment it out.
 
 # List of required packages
 packages <- c(
