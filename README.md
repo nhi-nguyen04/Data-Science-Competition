@@ -47,6 +47,7 @@ This repository is organized into several modules to keep the workflow clear and
 ### 🔹 `/models/`
 - Holds our **most promising models**.  
 - Includes three R Rmd files with finalized model workflows.
+- This also includes a file named log-of-hyperparameters with all hyperparameters throughout the project
 
 ### 🔹 `/report/`
 - Contains the **final project report** in PDF format.  
@@ -109,11 +110,16 @@ Going forward, both members will try to improve the model with the better score.
 We held a discord meeting at 2:15pm. All members attended. We discussed our further plans.
 Looking at the issues, we assigned each member equal tasks to do and finish before the 22nd.
 After finishing all tasks, we will look at the models again.
-In the next meeting with the professor, we will share our results and ask for feedback.
+In the next meeting with the supervisor, we will share our results and ask for feedback.
 
 04/07/2025
 
-Today we are going to optimize tunning spaces together.
+Today we are going to optimize tunning spaces together.After meeting with our supervisor , we were made aware that using default parameters is not always ideal.
+By using the package mlr3tunningspace we can define ranges that can help improve ROC AUC values of the models.
+We were also given access to CIP servers, which helps us use the university computational resources.
+One of our main problems we had before was the lack of computational resources as models like 
+Random Forest or Xgboost are very computational expensive but now its solved.
+We also look for alternatives to Xgboost i.e. LightGBM being faster and easier to iterate
 
 
 23/07/2025
@@ -139,6 +145,9 @@ We also consider improvement to our best model lightGBM.
 We attended a meeting on Discord where we discussed which sections of the report need improvement. We have also completed the code portion of our project.
 Now, our tasks are to refine both the presentation and the report, and to start adding content to the appendix section. 
 
+26/08/2025
+
+This is our final meeting.We revised the project and will submit it.
 
 
 ## Submission Log
