@@ -64,6 +64,13 @@ This repository is organized into several modules to keep the workflow clear and
 - Tracks all submissions made during the project.  
 - Includes structured logs and files submitted to the competition platform.
 
+  ## ⚠️ Important
+
+Before running the following commands, make sure you are on the **main** branch:
+
+```bash
+git checkout main
+```
 ---
 
 ### 🚀 How to Use This Repo
