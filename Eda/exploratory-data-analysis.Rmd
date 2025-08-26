@@ -7,6 +7,10 @@ output: html_document
 
 
 ```{r setup, include = FALSE}
+#This section was partially programmed with the help of ChatGPT-4
+#specially section 11
+
+
 # List of required packages
 packages <- c(
   "ggplot2",
